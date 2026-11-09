@@ -1,0 +1,78 @@
+{
+  "listen": {
+    "host": "127.0.0.1",
+    "port": 8787
+  },
+  "proxy": "http://127.0.0.1:7897",
+  "client_auth": {
+    "enabled": true,
+    "keys": [
+      "${GATEWAY_CLIENT_KEYS}"
+    ]
+  },
+  "providers": [
+    {
+      "name": "opencode-go",
+      "base_url": "https://opencode.ai/inference/go/openai/v1",
+      "anthropic_base_url": "https://opencode.ai/inference/go/anthropic/v1",
+      "api_key": "${OPENCODE_GO_API_KEY}",
+      "anthropic_api_key": "${OPENCODE_GO_API_KEY}",
+      "min_output_tokens": 16,
+      "needs_session": true,
+      "headers": {
+        "x-opencode-session": "{session}"
+      },
+      "model_map": {
+        "gpt-6-luna-responses": "gpt-6-luna"
+      },
+      "proxy_models": [
+        "gpt-6-luna",
+        "gpt-5.6-luna",
+        "grok-4.7",
+        "muse-spark-1.2-contributor",
+        "muse-spark-1.3-contributor",
+        "crouton-alpha-free"
+      ],
+      "models": [
+        "gpt-6-luna", "gpt-5.6-luna", "grok-4.7", "glm-5.3", "glm-5.3-flash",
+        "glm-5.2", "kimi-k3", "kimi-k3.1-pro", "kimi-k2.7-code", "deepseek-v4-pro",
+        "deepseek-v4.1-flash", "minimax-m3.1-flash", "longcat-2.0", "step-5-preview",
+        "hy3", "hy4", "mimo-v2.6-pro", "mimo-v2.6-flash", "beam-free", "iceman-contributor-free"
+      ],
+      "model_meta": {
+        "gpt-6-luna": {"context":1050000,"input":922000,"output":128000,"images":true,"tools":true,"reasoning":["low","medium","high","xhigh","max"],"pricing":{"input":0.10,"output":0.50,"cache_read":0.01,"cache_write":0.125,"currency":"USD","unit":"per_1m_tokens"}},
+        "gpt-5.6-luna": {"context":1050000,"input":922000,"output":128000,"images":true,"tools":true,"reasoning":["low","medium","high","xhigh","max"]},
+        "grok-4.7": {"context":500000,"output":500000,"images":true,"tools":true,"reasoning":["low","medium","high","xhigh"]},
+        "glm-5.3": {"context":1000000,"output":131072,"images":false,"tools":true,"reasoning":["low","high","max"],"pricing":{"input":1.40,"output":4.40,"cache_read":0.26,"currency":"USD","unit":"per_1m_tokens"}},
+        "glm-5.3-flash": {"context":1000000,"output":131072,"images":true,"tools":true,"reasoning":["low","high","max"],"pricing":{"input":0.15,"output":0.50,"cache_read":0.03,"currency":"USD","unit":"per_1m_tokens"}},
+        "glm-5.2": {"context":1000000,"output":131072,"images":false,"tools":true,"reasoning":["high","max"]},
+        "kimi-k3": {"context":1048576,"output":131072,"images":true,"tools":true,"reasoning":["max"],"pricing":{"input":3.00,"output":15.00,"cache_read":0.30,"cache_write":3.00,"currency":"USD","unit":"per_1m_tokens"}},
+        "kimi-k3.1-pro": {"context":1048576,"output":131072,"images":true,"tools":true,"reasoning":["low","high","max"]},
+        "kimi-k2.7-code": {"context":262144,"output":262144,"images":true,"tools":true,"reasoning":[],"pricing":{"input":0.95,"output":4.00,"cache_read":0.19,"currency":"USD","unit":"per_1m_tokens"}},
+        "deepseek-v4-pro": {"context":1000000,"output":384000,"images":false,"tools":true,"reasoning":["high","max"],"pricing":{"input":1.74,"output":3.48,"cache_read":0.145,"currency":"USD","unit":"per_1m_tokens"}},
+        "deepseek-v4.1-flash": {"context":1000000,"output":384000,"images":true,"tools":true,"reasoning":["low","high","max"],"pricing":{"input":0.30,"output":1.20,"cache_read":0.006,"currency":"USD","unit":"per_1m_tokens"}},
+        "minimax-m3.1-flash": {"context":1000000,"output":512000,"images":true,"tools":true,"reasoning":["low","medium","high","xhigh","max"]},
+        "longcat-2.0": {"context":1000000,"output":131072,"images":false,"tools":true,"reasoning":[]},
+        "step-5-preview": {"context":1000000,"input":1000000,"output":65536,"images":true,"tools":true,"reasoning":["low","medium","high"]},
+        "hy3": {"context":256000,"input":192000,"output":128000,"images":false,"tools":true,"reasoning":["low","high"]},
+        "hy4": {"context":1048576,"input":983010,"output":65536,"images":true,"tools":true,"reasoning":["high"]},
+        "mimo-v2.6-pro": {"context":1048576,"output":131072,"images":true,"tools":true,"reasoning":["low","medium","high"]},
+        "mimo-v2.6-flash": {"context":1048576,"output":131072,"images":true,"tools":true,"reasoning":["low","medium","high"]},
+        "beam-free": {"context":1048576,"output":131072,"images":false,"tools":true,"reasoning":["low","medium","high","xhigh","max"]},
+        "iceman-contributor-free": {"context":262144,"output":131072,"images":false,"tools":true,"reasoning":[]}
+      }
+    },
+    {
+      "name": "longcat",
+      "base_url": "https://api.longcat.chat/openai/v1",
+      "api_key": "${LONGCAT_API_KEY}",
+      "needs_session": false,
+      "proxy_models": [],
+      "use_proxy": false,
+      "models": ["LongCat-2.5-Preview"],
+      "model_meta": {
+        "LongCat-2.5-Preview": {"context":1000000,"input":1000000,"output":128000,"images":true,"tools":true,"reasoning":["low","medium","high"]}
+      }
+    }
+  ]
+}

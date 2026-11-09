@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+
+# Live credentials / local runtime configuration
+gateway_config.json
+.env
+.env.*
+!.env.example
+
+# Runtime data and request captures
+gateway.log
+gateway_usage.json
+gateway_last_request.json
+wb_bridge.log
+wb_last_request.json
+
+# Local diagnostics, replays, screenshots, and generated checks
+check*.js
+sim.js
+verify_price.js
+usage_admin_check.js
+dom_dump.html
+pricing_table_crop.png
+*.json.tmp
