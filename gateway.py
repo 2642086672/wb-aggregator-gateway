@@ -21,7 +21,7 @@ import sys
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -254,6 +254,20 @@ def _blank_usage():
     }
 
 
+DAYS_KEEP = 90
+
+
+def _prune_days(days):
+    """删除超过 90 天的按天统计（按日期字符串比较）；顺带清理结构损坏的桶。"""
+    if not isinstance(days, dict):
+        return
+    cutoff = time.strftime("%Y-%m-%d", time.localtime(time.time() - DAYS_KEEP * 86400))
+    for key in list(days.keys()):
+        bucket = days.get(key)
+        if not isinstance(key, str) or key < cutoff or not isinstance(bucket, dict):
+            del days[key]
+
+
 def _load_usage():
     try:
         with open(USAGE_PATH, encoding="utf-8") as f:
@@ -277,10 +291,15 @@ def _load_usage():
             quota["buckets"] = {}
         if not isinstance(data.get("quota_history"), list):
             data["quota_history"] = []
+        days = data.get("days")
+        if not isinstance(days, dict):
+            days = {}
+            data["days"] = days
+        _prune_days(days)
         return data
     except Exception:
         return {"since": _now_iso(), "updated": "", "totals": _blank_usage(),
-                "providers": {}, "models": {},
+                "providers": {}, "models": {}, "days": {},
                 "quota": {"since": _now_iso(), "billing_source": "", "buckets": {}},
                 "quota_history": []}
 
@@ -391,6 +410,28 @@ def record_usage(provider_name, model, usage, status, latency_ms, upstream_model
         mstat["upstream_model"] = upstream_model or model
         _bump_usage(mstat, usage, ok, latency_ms)
 
+        # 按天累计：供 今日 / 本周 / 本月 时间段统计使用（仅从本次更新后开始记录）
+        days = USAGE.setdefault("days", {})
+        day_key = time.strftime("%Y-%m-%d", time.localtime())
+        bucket = days.setdefault(day_key, {"totals": _blank_usage(),
+                                           "providers": {}, "models": {}})
+        if not isinstance(bucket.get("totals"), dict):
+            bucket["totals"] = _blank_usage()
+        if not isinstance(bucket.get("providers"), dict):
+            bucket["providers"] = {}
+        if not isinstance(bucket.get("models"), dict):
+            bucket["models"] = {}
+        _bump_usage(bucket["totals"], usage, ok, latency_ms)
+        dstat = bucket["providers"].setdefault(provider_name, _blank_usage())
+        dstat["name"] = provider_name
+        _bump_usage(dstat, usage, ok, latency_ms)
+        dmstat = bucket["models"].setdefault(key, _blank_usage())
+        dmstat["model"] = model
+        dmstat["provider"] = provider_name
+        dmstat["upstream_model"] = upstream_model or model
+        _bump_usage(dmstat, usage, ok, latency_ms)
+        _prune_days(days)
+
         # Go 额度：按小时累计 opencode.allowance，用于 5 小时/周/月进度
         allowance = float(usage.get("allowance") or 0)
         if allowance > 0:
@@ -443,6 +484,7 @@ def reset_usage():
         USAGE["totals"] = _blank_usage()
         USAGE["providers"] = {}
         USAGE["models"] = {}
+        USAGE["days"] = {}
         try:
             _save_usage_locked()
         except Exception as e:
@@ -534,42 +576,129 @@ def _avg_tps(stat):
     return round(float(stat.get("tps_sum", 0) or 0) / count, 2)
 
 
-def usage_snapshot():
+USAGE_PERIODS = ("today", "week", "month", "all")
+PERIOD_LABELS = {"today": "今日", "week": "本周", "month": "本月", "all": "全部"}
+PERIOD_NOTE = "按天统计自本次更新后开始，之前的数据无按天记录。"
+
+
+def _period_date_list(period):
+    """返回时间段包含的本地日期（YYYY-MM-DD）列表；all 返回 None。
+
+    today：当天；week：本周一到今天；month：本月 1 号到今天。
+    """
+    today = datetime.now().date()
+    if period == "today":
+        start = today
+    elif period == "week":
+        start = today - timedelta(days=today.weekday())
+    elif period == "month":
+        start = today.replace(day=1)
+    else:
+        return None
+    dates = []
+    cur = start
+    while cur <= today:
+        dates.append(cur.isoformat())
+        cur += timedelta(days=1)
+    return dates
+
+
+def _merge_usage_once(dst, src):
+    """按 _merge_usage 合并，但 usage_missing 只加一次。
+
+    注：_merge_usage 会把 usage_missing 加两次——它既在
+    ("requests", "ok", "errors", "usage_missing") 里，又在 USAGE_FIELDS 里。
+    厂商汇总沿用旧行为不动；时间段汇总用这里修正后的版本。
+    """
+    _merge_usage(dst, src)
+    dst["usage_missing"] = int(dst.get("usage_missing", 0)) - int(src.get("usage_missing", 0) or 0)
+
+
+def _aggregate_period(period):
+    """汇总指定时间段的 totals / providers / models（与累计数据同形）。
+
+    period 为 "all" 时直接返回累计数据；否则把 USAGE["days"] 里
+    对应日期的按天桶相加。返回 (totals, providers_dict, models_dict)。
+    """
+    if period == "all":
+        return (dict(USAGE.get("totals", {}) or {}),
+                {k: dict(v) for k, v in (USAGE.get("providers", {}) or {}).items()},
+                {k: dict(v) for k, v in (USAGE.get("models", {}) or {}).items()})
+    dates = _period_date_list(period) or []
+    totals = _blank_usage()
+    providers = {}
+    models = {}
+    days = USAGE.get("days") or {}
+    for ds in dates:
+        bucket = days.get(ds)
+        if not isinstance(bucket, dict):
+            continue
+        _merge_usage_once(totals, bucket.get("totals") or {})
+        for name, stat in (bucket.get("providers") or {}).items():
+            if not isinstance(stat, dict):
+                continue
+            item = providers.setdefault(name, _blank_usage())
+            item["name"] = name
+            _merge_usage_once(item, stat)
+        for key, stat in (bucket.get("models") or {}).items():
+            if not isinstance(stat, dict):
+                continue
+            item = models.setdefault(key, _blank_usage())
+            item["model"] = stat.get("model") or key.partition("::")[2]
+            item["provider"] = stat.get("provider") or key.partition("::")[0]
+            item["upstream_model"] = stat.get("upstream_model") or item["model"]
+            _merge_usage_once(item, stat)
+    return totals, providers, models
+
+
+def _build_usage_lists(totals, providers, models):
+    """由 totals / providers / models 生成快照里的列表（含厂商汇总与排序）。"""
+    providers_list = []
+    for name, stat in providers.items():
+        item = {"name": name}
+        item.update(stat)
+        item["cache_hit_rate"] = _cache_hit_rate(item)
+        item["avg_tps"] = _avg_tps(item)
+        providers_list.append(item)
+
+    vendors = {}
+    models_list = []
+    for key, stat in models.items():
+        provider_name, _, model = key.partition("::")
+        vendor = model_vendor(model, provider_name)
+        item = {"key": key, "vendor": vendor}
+        item.update(stat)
+        item["cache_hit_rate"] = _cache_hit_rate(item)
+        item["avg_tps"] = _avg_tps(item)
+        models_list.append(item)
+
+        agg = vendors.setdefault(vendor, _blank_usage())
+        agg["vendor"] = vendor
+        _merge_usage(agg, stat)
+
+    for item in vendors.values():
+        item["cache_hit_rate"] = _cache_hit_rate(item)
+        item["avg_tps"] = _avg_tps(item)
+
+    providers_list.sort(key=lambda x: int(x.get("total_tokens", 0)), reverse=True)
+    models_list.sort(key=lambda x: int(x.get("total_tokens", 0)), reverse=True)
+    vendor_list = sorted(vendors.values(),
+                         key=lambda x: int(x.get("total_tokens", 0)), reverse=True)
+    totals = dict(totals)
+    totals["cache_hit_rate"] = _cache_hit_rate(totals)
+    totals["avg_tps"] = _avg_tps(totals)
+    return totals, providers_list, vendor_list, models_list
+
+
+def usage_snapshot(period="all"):
+    if period not in USAGE_PERIODS:
+        period = "all"
     with USAGE_LOCK:
-        providers = []
-        for name, stat in USAGE.get("providers", {}).items():
-            item = {"name": name}
-            item.update(stat)
-            item["cache_hit_rate"] = _cache_hit_rate(item)
-            item["avg_tps"] = _avg_tps(item)
-            providers.append(item)
-
-        vendors = {}
-        models = []
-        for key, stat in USAGE.get("models", {}).items():
-            provider_name, _, model = key.partition("::")
-            vendor = model_vendor(model, provider_name)
-            item = {"key": key, "vendor": vendor}
-            item.update(stat)
-            item["cache_hit_rate"] = _cache_hit_rate(item)
-            item["avg_tps"] = _avg_tps(item)
-            models.append(item)
-
-            agg = vendors.setdefault(vendor, _blank_usage())
-            agg["vendor"] = vendor
-            _merge_usage(agg, stat)
-
-        for item in vendors.values():
-            item["cache_hit_rate"] = _cache_hit_rate(item)
-            item["avg_tps"] = _avg_tps(item)
-
-        providers.sort(key=lambda x: int(x.get("total_tokens", 0)), reverse=True)
-        models.sort(key=lambda x: int(x.get("total_tokens", 0)), reverse=True)
-        vendor_list = sorted(vendors.values(),
-                             key=lambda x: int(x.get("total_tokens", 0)), reverse=True)
-        totals = dict(USAGE.get("totals", {}))
-        totals["cache_hit_rate"] = _cache_hit_rate(totals)
-        totals["avg_tps"] = _avg_tps(totals)
+        totals, providers, models = _aggregate_period(period)
+        since = USAGE.get("since", "")
+        updated = USAGE.get("updated", "")
+        days_kept = len(USAGE.get("days") or {})
+    totals, providers, vendors, models = _build_usage_lists(totals, providers, models)
 
     now = time.time()
     with LIVE_LOCK:
@@ -592,12 +721,27 @@ def usage_snapshot():
     live_by_model = sorted(by_model.values(),
                            key=lambda x: x["output_tokens"], reverse=True)[:10]
 
+    dates = _period_date_list(period)
+    if period == "all":
+        period_note = ""
+        period_start = ""
+        period_end = ""
+    else:
+        period_note = PERIOD_NOTE
+        period_start = dates[0] if dates else ""
+        period_end = dates[-1] if dates else ""
     return {
-        "since": USAGE.get("since", ""),
-        "updated": USAGE.get("updated", ""),
+        "since": since,
+        "updated": updated,
+        "period": period,
+        "period_label": PERIOD_LABELS.get(period, "全部"),
+        "period_start": period_start,
+        "period_end": period_end,
+        "period_note": period_note,
+        "days_kept": days_kept,
         "totals": totals,
         "providers": providers,
-        "vendors": vendor_list,
+        "vendors": vendors,
         "models": models,
         "live": {
             "window_seconds": LIVE_WINDOW,
@@ -1368,6 +1512,10 @@ details[open] summary::before{content:"- "}
 .usage-filter input[type=text]{flex:1 1 220px;min-width:180px}
 .usage-filter label.toggle{display:inline-flex;align-items:center;gap:var(--s-2);font-size:var(--fs-3);color:var(--ink-2);cursor:pointer;min-height:44px}
 .usage-filter input[type=checkbox]{accent-color:var(--success);width:18px;height:18px}
+.usage-period{display:flex;gap:var(--s-2);flex-wrap:wrap;align-items:center;margin:0 0 var(--s-2)}
+.usage-period button{min-height:36px;padding:var(--s-1) var(--s-3)}
+.usage-period button.is-active{background:var(--accent);border-color:var(--accent);color:var(--accent-on)}
+#usagePeriodNote{margin-bottom:var(--s-3)}
 .top5-row{display:grid;grid-template-columns:minmax(140px,240px) 1fr 110px;gap:var(--s-3);align-items:center;padding:var(--s-1) 0;font-size:var(--fs-3)}
 .top5-row .m{font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .top5-row .n{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--font-mono)}
@@ -1493,6 +1641,13 @@ td .row-toggle{cursor:pointer;color:var(--accent)}
         <button class="sm danger" onclick="resetUsage()">重置</button>
       </span>
     </h2>
+    <div class="usage-period" id="usagePeriod" role="group" aria-label="用量时间段">
+      <button type="button" class="sm" data-period="today">今日</button>
+      <button type="button" class="sm" data-period="week">本周</button>
+      <button type="button" class="sm" data-period="month">本月</button>
+      <button type="button" class="sm is-active" data-period="all">全部</button>
+    </div>
+    <div class="hint-inline" id="usagePeriodNote"></div>
     <div class="stats" id="usageTotals"></div>
     <div id="liveTps" class="hint-inline" style="margin-top:10px"></div>
     <div style="margin-top:18px">
@@ -2161,7 +2316,7 @@ async function testAll(){
 document.getElementById('modalMask').addEventListener('click',e=>{ if(e.target.id==='modalMask') closeModal(); });
 load();
 setInterval(loadQuota, 60000);
-setInterval(loadUsage, 5000);
+setInterval(function(){ window.loadUsage(); }, 5000); /* 经 window 分发：用量页第 4 块覆盖了 loadUsage（时间段切换 + 5 个主数字），直接传函数引用会绕开覆盖，每 5 秒把 KPI 打回旧版累计视图 */
 </script>
 <script>
 (function(){
@@ -2261,14 +2416,18 @@ setInterval(loadUsage, 5000);
 })();
 </script>
 <script>
-/* 用量页重构（ui/usage-redesign）。
-   原有 3 个 script 块逐字节不动；本块只新增：覆盖 window.loadUsage 与
-   window.renderUsageTable（仅按模型表），其它 Tab、后端、/admin/api/* 均不动。 */
+/* 用量页重构（ui/usage-redesign）+ 时间段切换。
+   本块覆盖 window.loadUsage 与 window.renderUsageTable（仅按模型表），
+   新增今日 / 本周 / 本月 / 全部切换（默认全部），KPI、Top 5、厂商 /
+   Provider / 模型表都跟随时间段；搜索、厂商筛选、隐藏未使用、分页状态
+   在切换与 5 秒自动刷新时保留。另：第 2 块的 setInterval(loadUsage, 5000)
+   已改为经 window.loadUsage 分发，否则定时器会绕开本块的覆盖，
+   每 5 秒把用量页打回旧版累计视图。其它 Tab、后端、/admin/api/* 均不动。 */
 (function(){
   'use strict';
   var _origRenderUsageTable = window.renderUsageTable;
   var PAGE_SIZE = 10;
-  var state = { models: [], page: 1, search: '', vendor: '', hideUnused: true, expanded: {} };
+  var state = { models: [], page: 1, search: '', vendor: '', hideUnused: true, expanded: {}, period: 'all' };
   var listenersBound = false;
 
   function filteredModels(){
@@ -2354,9 +2513,28 @@ setInterval(loadUsage, 5000);
     var wrap = document.getElementById('usageModels');
     if (wrap) wrap.innerHTML = renderModelTable(state.models);
   }
+  function updatePeriodButtons(){
+    var btns = document.querySelectorAll('#usagePeriod button[data-period]');
+    Array.prototype.forEach.call(btns, function(btn){
+      if (btn.getAttribute('data-period') === state.period) btn.classList.add('is-active');
+      else btn.classList.remove('is-active');
+    });
+  }
+  function setPeriod(p){
+    if (['today', 'week', 'month', 'all'].indexOf(p) === -1) p = 'all';
+    if (state.period === p) return;
+    state.period = p;
+    state.page = 1;
+    updatePeriodButtons();
+    window.loadUsage();
+  }
   function bindFilters(){
     if (listenersBound) return;
     listenersBound = true;
+    var periodBtns = document.querySelectorAll('#usagePeriod button[data-period]');
+    Array.prototype.forEach.call(periodBtns, function(btn){
+      btn.addEventListener('click', function(){ setPeriod(btn.getAttribute('data-period')); });
+    });
     var search = document.getElementById('usageSearch');
     var vendorSel = document.getElementById('usageVendorFilter');
     var hideBox = document.getElementById('usageHideUnused');
@@ -2382,21 +2560,28 @@ setInterval(loadUsage, 5000);
       return '<option value="' + esc(v) + '">' + esc(v) + '</option>';
     }).join('');
     sel.value = cur;
+    if (cur && sel.value !== cur) { state.vendor = ''; sel.value = ''; }
   }
 
   window.renderUsageTable = function(items, type){
     if (type !== 'model') return _origRenderUsageTable(items, type);
     bindFilters();
+    renderTop5(items);
     return renderModelTable(items);
   };
 
   window.loadUsage = async function(){
     try {
-      var d = await api('/admin/api/usage');
+      var d = await api('/admin/api/usage?period=' + state.period);
       var t = d.totals || {};
       var live = d.live || {};
       var goStat = (d.providers || []).find(function(p){ return p.name === 'opencode-go'; }) || {};
       document.getElementById('usageSince').textContent = d.since ? ('统计起始 ' + d.since + ' · 更新 ' + (d.updated || '—')) : '';
+      var periodNote = document.getElementById('usagePeriodNote');
+      if (periodNote) {
+        var range = (d.period_start && d.period_end) ? ('（' + d.period_start + ' ~ ' + d.period_end + '）') : '';
+        periodNote.textContent = (d.period_note || '') + (range ? ' ' + range : '');
+      }
       /* 12 个 KPI → 5 个主数字（实时 TPS 提回主 KPI）；其余 7 个收进小字，数值与文案与原版一致 */
       document.getElementById('usageTotals').innerHTML =
         '<div class="stat"><div class="label">请求数</div><div class="value">' + fmtCount(t.requests) + '</div>'
@@ -3461,7 +3646,10 @@ class GatewayHandler(BaseHTTPRequestHandler):
                                         for k in ((routing_config().get("smart_aliases") or {})
                                                   .keys())}})
         elif path == "/admin/api/usage":
-            self._json(200, usage_snapshot())
+            from urllib.parse import parse_qs, urlparse
+            q = parse_qs(urlparse(self.path).query)
+            period = q.get("period", ["all"])[0]
+            self._json(200, usage_snapshot(period))
         elif path == "/admin/api/quota":
             from urllib.parse import parse_qs, urlparse
             q = parse_qs(urlparse(self.path).query)

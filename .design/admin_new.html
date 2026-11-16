@@ -228,6 +228,10 @@ details[open] summary::before{content:"- "}
 .usage-filter input[type=text]{flex:1 1 220px;min-width:180px}
 .usage-filter label.toggle{display:inline-flex;align-items:center;gap:var(--s-2);font-size:var(--fs-3);color:var(--ink-2);cursor:pointer;min-height:44px}
 .usage-filter input[type=checkbox]{accent-color:var(--success);width:18px;height:18px}
+.usage-period{display:flex;gap:var(--s-2);flex-wrap:wrap;align-items:center;margin:0 0 var(--s-2)}
+.usage-period button{min-height:36px;padding:var(--s-1) var(--s-3)}
+.usage-period button.is-active{background:var(--accent);border-color:var(--accent);color:var(--accent-on)}
+#usagePeriodNote{margin-bottom:var(--s-3)}
 .top5-row{display:grid;grid-template-columns:minmax(140px,240px) 1fr 110px;gap:var(--s-3);align-items:center;padding:var(--s-1) 0;font-size:var(--fs-3)}
 .top5-row .m{font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .top5-row .n{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--font-mono)}
@@ -353,6 +357,13 @@ td .row-toggle{cursor:pointer;color:var(--accent)}
         <button class="sm danger" onclick="resetUsage()">重置</button>
       </span>
     </h2>
+    <div class="usage-period" id="usagePeriod" role="group" aria-label="用量时间段">
+      <button type="button" class="sm" data-period="today">今日</button>
+      <button type="button" class="sm" data-period="week">本周</button>
+      <button type="button" class="sm" data-period="month">本月</button>
+      <button type="button" class="sm is-active" data-period="all">全部</button>
+    </div>
+    <div class="hint-inline" id="usagePeriodNote"></div>
     <div class="stats" id="usageTotals"></div>
     <div id="liveTps" class="hint-inline" style="margin-top:10px"></div>
     <div style="margin-top:18px">
@@ -1021,7 +1032,7 @@ async function testAll(){
 document.getElementById('modalMask').addEventListener('click',e=>{ if(e.target.id==='modalMask') closeModal(); });
 load();
 setInterval(loadQuota, 60000);
-setInterval(loadUsage, 5000);
+setInterval(function(){ window.loadUsage(); }, 5000); /* 经 window 分发：用量页第 4 块覆盖了 loadUsage（时间段切换 + 5 个主数字），直接传函数引用会绕开覆盖，每 5 秒把 KPI 打回旧版累计视图 */
 </script>
 <script>
 (function(){
@@ -1121,14 +1132,18 @@ setInterval(loadUsage, 5000);
 })();
 </script>
 <script>
-/* 用量页重构（ui/usage-redesign）。
-   原有 3 个 script 块逐字节不动；本块只新增：覆盖 window.loadUsage 与
-   window.renderUsageTable（仅按模型表），其它 Tab、后端、/admin/api/* 均不动。 */
+/* 用量页重构（ui/usage-redesign）+ 时间段切换。
+   本块覆盖 window.loadUsage 与 window.renderUsageTable（仅按模型表），
+   新增今日 / 本周 / 本月 / 全部切换（默认全部），KPI、Top 5、厂商 /
+   Provider / 模型表都跟随时间段；搜索、厂商筛选、隐藏未使用、分页状态
+   在切换与 5 秒自动刷新时保留。另：第 2 块的 setInterval(loadUsage, 5000)
+   已改为经 window.loadUsage 分发，否则定时器会绕开本块的覆盖，
+   每 5 秒把用量页打回旧版累计视图。其它 Tab、后端、/admin/api/* 均不动。 */
 (function(){
   'use strict';
   var _origRenderUsageTable = window.renderUsageTable;
   var PAGE_SIZE = 10;
-  var state = { models: [], page: 1, search: '', vendor: '', hideUnused: true, expanded: {} };
+  var state = { models: [], page: 1, search: '', vendor: '', hideUnused: true, expanded: {}, period: 'all' };
   var listenersBound = false;
 
   function filteredModels(){
@@ -1214,9 +1229,28 @@ setInterval(loadUsage, 5000);
     var wrap = document.getElementById('usageModels');
     if (wrap) wrap.innerHTML = renderModelTable(state.models);
   }
+  function updatePeriodButtons(){
+    var btns = document.querySelectorAll('#usagePeriod button[data-period]');
+    Array.prototype.forEach.call(btns, function(btn){
+      if (btn.getAttribute('data-period') === state.period) btn.classList.add('is-active');
+      else btn.classList.remove('is-active');
+    });
+  }
+  function setPeriod(p){
+    if (['today', 'week', 'month', 'all'].indexOf(p) === -1) p = 'all';
+    if (state.period === p) return;
+    state.period = p;
+    state.page = 1;
+    updatePeriodButtons();
+    window.loadUsage();
+  }
   function bindFilters(){
     if (listenersBound) return;
     listenersBound = true;
+    var periodBtns = document.querySelectorAll('#usagePeriod button[data-period]');
+    Array.prototype.forEach.call(periodBtns, function(btn){
+      btn.addEventListener('click', function(){ setPeriod(btn.getAttribute('data-period')); });
+    });
     var search = document.getElementById('usageSearch');
     var vendorSel = document.getElementById('usageVendorFilter');
     var hideBox = document.getElementById('usageHideUnused');
@@ -1242,21 +1276,28 @@ setInterval(loadUsage, 5000);
       return '<option value="' + esc(v) + '">' + esc(v) + '</option>';
     }).join('');
     sel.value = cur;
+    if (cur && sel.value !== cur) { state.vendor = ''; sel.value = ''; }
   }
 
   window.renderUsageTable = function(items, type){
     if (type !== 'model') return _origRenderUsageTable(items, type);
     bindFilters();
+    renderTop5(items);
     return renderModelTable(items);
   };
 
   window.loadUsage = async function(){
     try {
-      var d = await api('/admin/api/usage');
+      var d = await api('/admin/api/usage?period=' + state.period);
       var t = d.totals || {};
       var live = d.live || {};
       var goStat = (d.providers || []).find(function(p){ return p.name === 'opencode-go'; }) || {};
       document.getElementById('usageSince').textContent = d.since ? ('统计起始 ' + d.since + ' · 更新 ' + (d.updated || '—')) : '';
+      var periodNote = document.getElementById('usagePeriodNote');
+      if (periodNote) {
+        var range = (d.period_start && d.period_end) ? ('（' + d.period_start + ' ~ ' + d.period_end + '）') : '';
+        periodNote.textContent = (d.period_note || '') + (range ? ' ' + range : '');
+      }
       /* 12 个 KPI → 5 个主数字（实时 TPS 提回主 KPI）；其余 7 个收进小字，数值与文案与原版一致 */
       document.getElementById('usageTotals').innerHTML =
         '<div class="stat"><div class="label">请求数</div><div class="value">' + fmtCount(t.requests) + '</div>'
