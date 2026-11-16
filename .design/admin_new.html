@@ -215,7 +215,9 @@ details[open] summary::before{content:"- "}
 
 
 /* ===== 用量页重构（ui/usage-redesign）：KPI 精简 + Top 5 + 筛选分页 ===== */
-#usageTotals{grid-template-columns:repeat(4,1fr)}
+#usageTotals{grid-template-columns:repeat(5,1fr)}
+#usageTotals .stat:nth-child(4n+1){border-left:1px solid var(--border)}
+#usageTotals .stat:nth-child(5n+1){border-left:0}
 #usageTotals .stat .value{font-size:var(--fs-6)}
 #usageTotals .stat.hero .value{font-size:var(--fs-8);color:var(--accent)}
 #usageTotals .stat .sub{font-size:var(--fs-2);color:var(--muted);margin-top:var(--s-1);line-height:1.6}
@@ -1255,12 +1257,14 @@ setInterval(loadUsage, 5000);
       var live = d.live || {};
       var goStat = (d.providers || []).find(function(p){ return p.name === 'opencode-go'; }) || {};
       document.getElementById('usageSince').textContent = d.since ? ('统计起始 ' + d.since + ' · 更新 ' + (d.updated || '—')) : '';
-      /* 12 个 KPI → 4 个主数字；其余 8 个收进小字，数值与文案与原版一致 */
+      /* 12 个 KPI → 5 个主数字（实时 TPS 提回主 KPI）；其余 7 个收进小字，数值与文案与原版一致 */
       document.getElementById('usageTotals').innerHTML =
         '<div class="stat"><div class="label">请求数</div><div class="value">' + fmtCount(t.requests) + '</div>'
         + '<div class="sub">Go 本地 Token ' + fmtTokens(goStat.total_tokens) + ' · 用量缺失请求 ' + fmtCount(t.usage_missing) + '</div></div>'
         + '<div class="stat hero"><div class="label">总 Token</div><div class="value">' + fmtTokens(t.total_tokens) + '</div>'
         + '<div class="sub">输入 ' + fmtTokens(t.input_tokens) + ' · 输出 ' + fmtTokens(t.output_tokens) + ' · 推理 ' + fmtTokens(t.reasoning_tokens) + '</div></div>'
+        + '<div class="stat"><div class="label">实时 TPS</div><div class="value">' + fmtTps(live.output_tps) + ' <small>输出 / ' + (live.window_seconds||60) + 's</small></div>'
+        + '<div class="sub">输入 ' + fmtTps(live.input_tps) + ' · 合计 ' + fmtTps(live.total_tps) + '</div></div>'
         + '<div class="stat"><div class="label">缓存命中率</div><div class="value">' + fmtRate(t.cache_hit_rate) + '</div>'
         + '<div class="sub">缓存读 Token ' + fmtTokens(t.cached_tokens) + '</div></div>'
         + '<div class="stat"><div class="label">实扣</div><div class="value">$' + Number(t.cost || 0).toFixed(6) + '</div>'
