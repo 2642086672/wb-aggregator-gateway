@@ -1,0 +1,62 @@
+__pycache__/
+*.py[cod]
+
+# Live credentials / local runtime configuration
+gateway_config.json
+gateway_config.json.bak*
+gateway_config*.bak*
+.env
+.env.*
+!.env.example
+
+# Runtime data and request captures
+gateway.log
+gateway_usage.json
+gateway_last_request.json
+wb_bridge.log
+wb_last_request.json
+
+# Replays / raw request-response captures (may contain real provider keys)
+replay*.json
+resp_*.json
+t[0-9].json
+k[0-9].json
+r[0-9].json
+gm[0-9].json
+gomodels*.json
+zen[0-9].txt
+
+# Local diagnostics, screenshots, and generated checks
+check*.js
+sim.js
+verify_price.js
+usage_admin_check.js
+dom_dump.html
+pricing_table_crop.png
+*.json.tmp
+
+# Backups of the main program
+gateway.py.bak*
+*.py.bak*
+
+# Local environments (dependencies live here, not in the repo)
+.venv/
+venv/
+.env/**
+
+# Internal working notes and design pipeline artefacts
+.workbuddy/
+.design/_edge_*/
+.design/_dom_*.html
+.design/__pycache__/
+.design/probe_*.png
+.design/live_*.png
+.design/_render_preview.py
+.design/_edge_profile_*
+.design/sync_stamp.txt
+
+# Local preview instances / scratch
+admin_preview.html
+PROJECT_STATE.md
+项目分析报告.md
+2026-11-07-17-11-42.zip

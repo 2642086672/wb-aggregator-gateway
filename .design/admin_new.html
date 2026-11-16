@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>聚合网关管理端</title>
+<style>
+/* ===== DESIGN.md §2.3 完整 :root —— 整块粘贴，五段齐全 ===== */
+:root{
+  /* ① 面：三级明度 */
+  --bg:#F4F6F9; --surface:#FFFFFF; --raised:#EDF1F6; --border:#DDE3EC;
+  /* ② 字：正文用满色墨，次要才降灰 */
+  --ink:#16202E; --ink-2:#3A4657; --muted:#5B6675;
+  /* ③ 强调：只上按钮 / 当前项 / 关键数字 */
+  --accent:#2563EB; --accent-on:#FFFFFF; --accent-hover:#1D4ED8; --accent-soft:#E8F0FE;
+  /* ④ 语义四件套（深字）；浅底另列 */
+  --info:#1D4ED8; --warn:#8A5A00; --danger:#B42318; --success:#1F7A4D;
+  --info-soft:#E8F0FE; --warn-soft:#FBF0DA; --danger-soft:#FDECEA; --success-soft:#E7F4EC;
+  /* ⑤ 深色终端（产品自带，继承） */
+  --log-bg:#0F172A; --log-fg:#E2E8F0;
+  /* ⑥ 高度二选一：平面表面=发丝线，浮起表面=阴影，永不叠加 */
+  --elev-flat:none;
+  --elev-ring:0 0 0 1px var(--border);
+  --elev-raised:0 8px 28px rgba(22,32,46,.16);
+  --focus:0 0 0 2px var(--accent), 0 0 0 4px rgba(37,99,235,.18);
+  /* ⑦ 动效：三处就够 */
+  --motion-fast:150ms; --motion-base:200ms; --ease:cubic-bezier(.2,0,0,1);
+  /* ⑧ 八档字号（§3） */
+  --fs-1:11px; --fs-2:12px; --fs-3:13px; --fs-4:14px;
+  --fs-5:16px; --fs-6:20px; --fs-7:24px; --fs-8:32px;
+  /* ⑨ 间距 8 档（§4） */
+  --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px;
+  --s-6:24px; --s-8:32px; --s-12:48px; --s-18:72px;
+  /* ⑩ 圆角 3 档 / 容器 / 层级 */
+  --r-sm:8px; --r-md:12px; --r-lg:16px;
+  --container:1120px;
+  --z-base:0; --z-dropdown:100; --z-sticky:200; --z-overlay:300;
+  --z-modal:400; --z-toast:500; --z-tooltip:600;
+  /* ⑪ 字体（系统栈，用户禁外部字体） */
+  --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC",sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+/* 冻结脚本内联样式仍引用旧变量名：只做别名映射，值不新造 */
+:root{
+  --mono:var(--font-mono); --card:var(--surface); --text:var(--ink);
+  --primary:var(--accent); --primary-h:var(--accent-hover);
+  --ok:var(--success); --tag:var(--raised); --mask:rgba(15,23,42,.45);
+}
+
+/* ===== 基础 ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-ui);background:var(--bg);color:var(--ink);font-size:var(--fs-4);line-height:1.7;font-weight:400;-webkit-font-smoothing:antialiased}
+code,kbd,pre{font-family:var(--font-mono)}
+code{font-size:var(--fs-2);background:var(--raised);color:var(--ink-2);padding:0 var(--s-1);border-radius:var(--r-sm)}
+small{font-size:var(--fs-2)}
+a{color:var(--accent)}
+[hidden]{display:none!important}
+::selection{background:var(--accent-soft);color:var(--ink)}
+::placeholder{color:var(--muted);opacity:1}
+*{scrollbar-color:var(--border) transparent;scrollbar-width:thin}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:var(--r-sm)}
+::-webkit-scrollbar-track{background:transparent}
+:focus-visible{outline:none;box-shadow:var(--focus)}
+input,textarea{caret-color:var(--accent)}
+.tab,.stat .value,.quota-card .value,.table-wrap td.num{font-variant-numeric:tabular-nums}
+
+/* ===== 常驻壳：细线 T 形 48px 顶栏（§5.0） ===== */
+header{background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:var(--z-sticky)}
+.shell{max-width:var(--container);margin:0 auto;padding:0 var(--s-6);display:flex;align-items:center;justify-content:space-between;gap:var(--s-6);min-height:48px}
+.header-left{display:flex;align-items:center;gap:var(--s-6);min-width:0}
+header h1{font-size:var(--fs-5);font-weight:500;display:flex;align-items:center;gap:var(--s-2);white-space:nowrap;line-height:1.3}
+header h1 svg{flex:none}
+.ver{font-size:var(--fs-1);font-weight:500;color:var(--muted);background:var(--raised);border:1px solid var(--border);padding:0 var(--s-2);border-radius:var(--r-sm)}
+.header-right{display:flex;align-items:center;gap:var(--s-2);flex:none}
+.badge{display:inline-flex;align-items:center;gap:var(--s-2);padding:var(--s-1) var(--s-3);border-radius:var(--r-sm);font-size:var(--fs-2);font-weight:500;background:var(--success-soft);color:var(--success)}
+.badge::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--success)}
+.badge.off{background:var(--danger-soft);color:var(--danger)}
+.badge.off::before{background:var(--danger)}
+.tabs{display:flex;align-items:stretch;gap:var(--s-2);min-height:48px}
+.tab{appearance:none;cursor:pointer;background:transparent;border:0;border-bottom:2px solid transparent;border-radius:0;color:var(--muted);font-family:inherit;font-size:var(--fs-4);font-weight:400;line-height:1.3;padding:0 var(--s-3);min-height:44px;display:inline-flex;align-items:center;white-space:nowrap;transition:color var(--motion-fast) var(--ease),border-color var(--motion-fast) var(--ease)}
+.tab:hover{color:var(--ink)}
+.tab.is-active{color:var(--ink);font-weight:500;border-bottom-color:var(--accent)}
+
+/* ===== 控件 ===== */
+button{cursor:pointer;font-family:inherit;border:1px solid var(--border);background:var(--surface);color:var(--ink);padding:var(--s-2) var(--s-4);border-radius:var(--r-sm);font-size:var(--fs-3);font-weight:500;line-height:1.5;min-height:44px;transition:background-color var(--motion-fast) var(--ease),border-color var(--motion-fast) var(--ease),color var(--motion-fast) var(--ease)}
+button:hover{border-color:var(--muted);background:var(--raised)}
+button:active{background:var(--raised)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-on)}
+button.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+button.danger{color:var(--danger);border-color:var(--danger-soft);background:var(--danger-soft)}
+button.danger:hover{background:var(--danger-soft);border-color:var(--danger)}
+button.sm{padding:var(--s-1) var(--s-3);font-size:var(--fs-2);min-height:44px}
+button:disabled,input:disabled,textarea:disabled{opacity:.55;cursor:not-allowed}
+
+/* ===== 容器 / 4 块板（只改 display，不摘 DOM） ===== */
+main{max-width:var(--container);margin:0 auto;padding:var(--s-6) var(--s-6) var(--s-12)}
+.view{display:none}
+.view.is-active{display:grid;grid-template-columns:repeat(12,1fr);gap:var(--s-4);align-items:start}
+.view .card{grid-column:span 12}
+/* 防 min-content 撑破 12 栏栅格（真 390px 实测：栅格项默认 min-width:auto 会把卡片撑到 416px） */
+.view .card,.card > *,.stat,.quota-card,.quota-cell,.quota-line,.quota-text,.tag,.table-wrap{min-width:0}
+.table-wrap{max-width:100%}
+code,.hint-inline,.field .hint,.quota-text,.provider-meta,.log{overflow-wrap:anywhere}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--s-6)}
+.card h2{font-size:var(--fs-4);font-weight:500;line-height:1.3;margin-bottom:var(--s-4);display:flex;align-items:center;justify-content:space-between;gap:var(--s-2);flex-wrap:wrap}
+.card h2.sub-h{font-size:var(--fs-3);font-weight:500;color:var(--muted);display:block;margin-bottom:var(--s-2)!important}
+.card h2 .hint-inline{font-weight:400}
+.row{display:flex;gap:var(--s-2);flex-wrap:wrap;align-items:center}
+
+/* ===== KPI：1px 竖线分列，不再嵌套小卡（§10 主落地决定） ===== */
+.stats{display:grid;grid-template-columns:repeat(12,1fr);gap:0}
+.stat,.quota-card{background:transparent;border-radius:0;border-left:1px solid var(--border);padding:var(--s-1) var(--s-4)}
+.stat .label{font-size:var(--fs-2);color:var(--muted);margin-bottom:var(--s-1);line-height:1.5}
+.stat .value{font-size:var(--fs-6);font-weight:500;line-height:1.3;font-variant-numeric:tabular-nums;color:var(--ink);word-break:break-word}
+.stat .value small{font-size:var(--fs-2);font-weight:400;color:var(--muted)}
+#stats{display:flex;flex-wrap:wrap;gap:0}
+#stats .stat{flex:1 1 140px;min-width:0;border-bottom:1px solid var(--border)}
+#stats .stat:first-child{border-left:0}
+#usageTotals{display:grid;grid-template-columns:repeat(4,1fr);gap:0}
+#usageTotals .stat{border-bottom:1px solid var(--border)}
+#usageTotals .stat:nth-child(4n+1){border-left:0}
+/* 冻结脚本 4 处行内 font-size（L452-455）不许改字节，用 !important 覆盖 */
+#stats .stat:nth-child(-n+3) .value{font-size:var(--fs-6)}
+#stats .stat:nth-child(n+4) .value{font-family:var(--font-mono)}
+#stats .stat:nth-child(-n+5) .value{font-size:var(--fs-4)!important}
+#stats .stat:nth-child(n+6) .value{font-size:var(--fs-2)!important}
+/* 每屏唯一 32px 主角数字 */
+#quotaSummary .quota-card:first-child .value{font-size:var(--fs-8);color:var(--ink);line-height:1.3}
+#usageTotals .stat:nth-child(6) .value{font-size:var(--fs-8);color:var(--ink);line-height:1.3}
+
+/* ===== 额度 / 进度 ===== */
+.quota-summary{display:grid;grid-template-columns:repeat(12,1fr);gap:var(--s-4);align-items:start}
+.quota-card{grid-column:span 3}
+#quotaSummary .quota-card:first-child{grid-column:span 6}
+#zenSummary .quota-card{grid-column:span 6}
+.quota-card .label{font-size:var(--fs-2);color:var(--muted);display:flex;justify-content:space-between;gap:var(--s-2);line-height:1.5}
+.quota-card .value{font-size:var(--fs-6);font-weight:500;font-variant-numeric:tabular-nums;margin:var(--s-2) 0;line-height:1.3;color:var(--ink)}
+.quota-card .progress{margin-bottom:var(--s-2)}
+.quota-cell{min-width:170px}
+.quota-line{display:flex;align-items:center;gap:var(--s-2)}
+.quota-text{font-family:var(--font-mono);font-size:var(--fs-1);color:var(--muted);white-space:nowrap}
+.progress{height:8px;background:var(--raised);border-radius:var(--r-md);overflow:hidden;min-width:70px}
+.progress>i{display:block;height:100%;background:var(--ink-2);transition:width var(--motion-base) var(--ease)}
+.progress.warn>i{background:var(--warn)}
+.progress.danger>i{background:var(--danger)}
+
+/* ===== Provider / 标签 ===== */
+.provider{border:1px solid var(--border);border-radius:var(--r-md);padding:var(--s-4);margin-bottom:var(--s-3)}
+.provider:last-child{margin-bottom:0}
+.provider-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s-3);flex-wrap:wrap}
+.provider-name{font-weight:500;font-size:var(--fs-4);display:flex;align-items:center;gap:var(--s-2);color:var(--ink);line-height:1.3}
+.provider-name .dot{width:8px;height:8px;border-radius:50%;background:var(--success);flex:none}
+.provider-meta{font-size:var(--fs-2);color:var(--muted);margin-top:var(--s-2);word-break:break-all;font-family:var(--font-mono)}
+.tags{display:flex;flex-wrap:wrap;gap:var(--s-2);margin-top:var(--s-3)}
+.tag{background:var(--raised);color:var(--ink);padding:var(--s-1) var(--s-2);border-radius:var(--r-sm);font-size:var(--fs-2);font-family:var(--font-mono);cursor:pointer;min-height:44px;display:inline-flex;align-items:center;border:1px solid transparent;transition:background-color var(--motion-fast) var(--ease),border-color var(--motion-fast) var(--ease)}
+.tag:hover{border-color:var(--muted)}
+.tag.proxy{background:var(--warn-soft);color:var(--warn)}
+.tag.testing{background:var(--raised);color:var(--muted);cursor:wait}
+.tag.ok{background:var(--success-soft);color:var(--success);border-color:var(--success)}
+.tag.fail{background:var(--danger-soft);color:var(--danger);border-color:var(--danger)}
+.tag.pill{background:var(--info-soft);color:var(--info);cursor:default}
+#providers .provider:first-child .provider-name{font-size:var(--fs-7)}
+
+/* ===== 日志终端（整板唯一深色通栏）/ 表格 ===== */
+.log{background:var(--log-bg);color:var(--log-fg);border-radius:var(--r-md);padding:var(--s-4);font-family:var(--font-mono);font-size:var(--fs-2);line-height:1.7;height:320px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+.log .t{color:var(--muted)}
+.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--r-md)}
+.table-wrap table{width:100%;border-collapse:collapse;font-size:var(--fs-1)}
+.table-wrap th,.table-wrap td{padding:var(--s-1) var(--s-1);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;line-height:1.5}
+.table-wrap th{position:sticky;top:0;background:var(--surface);font-weight:500;font-size:var(--fs-1);color:var(--muted);z-index:var(--z-sticky)}
+.table-wrap tr:last-child td{border-bottom:none}
+.table-wrap td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--font-mono)}
+.table-wrap td.center{text-align:center}
+.table-wrap td.mono{font-family:var(--font-mono)}
+.hint-inline{font-size:var(--fs-2);font-weight:400;color:var(--muted);line-height:1.7}
+.empty{color:var(--muted);font-size:var(--fs-3);padding:var(--s-2) 0}
+
+/* ===== 表单 / 浮层 / 反馈 ===== */
+details{margin-top:var(--s-4)}
+summary{cursor:pointer;font-size:var(--fs-2);color:var(--info);padding:var(--s-1) 0;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+ ";font-family:var(--font-mono);color:var(--muted)}
+details[open] summary::before{content:"- "}
+.modal-mask{position:fixed;inset:0;background:var(--mask);display:none;align-items:center;justify-content:center;z-index:var(--z-overlay);padding:var(--s-4)}
+.modal-mask.show{display:flex}
+.modal{background:var(--surface);border:0;border-radius:var(--r-lg);padding:var(--s-6);width:100%;max-width:640px;max-height:90vh;overflow:auto;box-shadow:var(--elev-raised);z-index:var(--z-modal);position:relative}
+.modal h3{font-size:var(--fs-5);font-weight:500;margin-bottom:var(--s-4)}
+.field{margin-bottom:var(--s-4)}
+.field label{display:block;font-size:var(--fs-3);font-weight:500;color:var(--ink-2);margin-bottom:var(--s-2)}
+.field input,.field textarea{width:100%;padding:var(--s-2) var(--s-3);border:1px solid var(--border);border-radius:var(--r-sm);font-size:var(--fs-3);font-family:inherit;background:var(--surface);color:var(--ink);min-height:44px;line-height:1.5}
+.field textarea{font-family:var(--font-mono);font-size:var(--fs-2);resize:vertical}
+.field input:focus,.field textarea:focus{outline:none;border-color:var(--accent);box-shadow:var(--focus)}
+.field .hint{font-size:var(--fs-1);color:var(--muted);margin-top:var(--s-1)}
+#routingJson{padding:var(--s-6);font-size:var(--fs-3);min-height:280px}
+.checks{display:flex;flex-wrap:wrap;gap:var(--s-4)}
+.checks label{display:flex;align-items:center;gap:var(--s-2);font-size:var(--fs-3);font-weight:400;color:var(--ink);cursor:pointer}
+.checks input[type=checkbox]{width:auto;min-height:0;accent-color:var(--success)}
+.modal-foot{display:flex;justify-content:flex-end;gap:var(--s-2);margin-top:var(--s-4)}
+.toast{position:fixed;bottom:calc(var(--s-6) + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:var(--surface);color:var(--ink);border:1px solid var(--border);box-shadow:var(--elev-raised);padding:var(--s-3) var(--s-6);border-radius:var(--r-sm);font-size:var(--fs-3);opacity:0;transition:opacity var(--motion-base) var(--ease);z-index:var(--z-toast);pointer-events:none}
+.toast.show{opacity:1}
+
+/* ===== 逐板编排（§5）：DOM 顺序与视觉/焦点顺序一致，不用 order ===== */
+/* 运行台：Go 额度(1) → 总览(2) → Zen(3) → 日志(4) */
+#view-run > .card:nth-child(2){margin-top:var(--s-2)}          /* gap16 + 8 = 24 */
+#view-run > .card:nth-child(4){margin-top:var(--s-8);padding:0;overflow:hidden} /* gap16 + 32 = 48 */
+#view-run > .card:nth-child(4) h2{padding:var(--s-6) var(--s-6) 0}
+#view-run > .card:nth-child(4) .log{border-radius:0;height:320px}
+/* 用量：数字带 → 表格带 32px，三表之间 16px */
+#liveTps{margin-top:var(--s-2)!important}
+#view-usage .card > div[style*="margin-top:18px"]{margin-top:var(--s-4)!important}
+#view-usage .card > div[style*="margin-top:18px"]:has(#usageVendors){margin-top:var(--s-8)!important}
+/* 上游 / 规则：两卡之间 32px */
+#view-upstream > .card:nth-child(2),#view-rules > .card:nth-child(2){margin-top:var(--s-4)}
+
+/* ===== 平板 8 栏 / 手机 4 栏（§4.2 / §7） ===== */
+@media (max-width:1024px){
+  .view.is-active{grid-template-columns:repeat(8,1fr);gap:var(--s-4)}
+  .view .card{grid-column:1/-1}
+  .quota-summary{grid-template-columns:repeat(8,1fr)}
+  #quotaSummary .quota-card:first-child{grid-column:span 4}
+  #quotaSummary .quota-card{grid-column:span 2}
+  #zenSummary .quota-card{grid-column:span 4}
+  #usageTotals{grid-template-columns:repeat(2,1fr)}
+  #usageTotals .stat:nth-child(4n+1){border-left:1px solid var(--border)}
+  #usageTotals .stat:nth-child(2n+1){border-left:0}
+}
+@media (max-width:640px){
+  .shell{flex-direction:column;align-items:stretch;gap:var(--s-3);padding:var(--s-3) var(--s-4)}
+  .header-left{width:100%;flex-direction:column;align-items:stretch;gap:var(--s-2)}
+  .header-right{width:100%;justify-content:flex-start;flex-wrap:wrap;gap:var(--s-2)}
+  header h1{font-size:var(--fs-4)}
+  .tabs{width:100%;min-height:44px;gap:0}
+  .tab{flex:1 1 0;justify-content:center;padding:0 var(--s-1);font-size:var(--fs-3)}
+  main{padding:var(--s-4) var(--s-4) var(--s-12)}
+  .view.is-active{grid-template-columns:repeat(4,1fr);gap:var(--s-3)}
+  .view .card{grid-column:1/-1;padding:var(--s-4)}
+  .quota-summary{grid-template-columns:1fr;gap:0}
+  #quotaSummary .quota-card,#quotaSummary .quota-card:first-child,#zenSummary .quota-card{grid-column:1/-1;border-left:0;border-top:1px solid var(--border)}
+  .quota-summary .quota-card:first-child{border-top:0}
+  #stats{display:grid;grid-template-columns:repeat(2,1fr);gap:0}
+  #stats .stat{flex:none;border-left:1px solid var(--border)}
+  #stats .stat:nth-child(2n+1){border-left:0}
+  #usageTotals{grid-template-columns:repeat(2,1fr)}
+  .table-wrap{max-height:none}
+  .quota-text{white-space:normal}
+  .log{height:280px}
+  #view-run > .card:nth-child(4) h2{padding:var(--s-4) var(--s-4) 0}
+  button,.tab,.tag{min-height:44px}
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="shell">
+    <div class="header-left">
+      <h1><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3.5 8 8M2 8h6M2 12.5 8 8M8 8h6"/></svg>聚合网关管理端 <span class="ver">v1.4.4</span></h1>
+      <nav class="tabs" role="tablist" aria-label="仪表板分组">
+        <button type="button" class="tab is-active" id="tab-run" role="tab" aria-selected="true" aria-controls="view-run" data-view="run" tabindex="0">运行台</button>
+        <button type="button" class="tab" id="tab-usage" role="tab" aria-selected="false" aria-controls="view-usage" data-view="usage" tabindex="-1">用量</button>
+        <button type="button" class="tab" id="tab-upstream" role="tab" aria-selected="false" aria-controls="view-upstream" data-view="upstream" tabindex="-1">上游</button>
+        <button type="button" class="tab" id="tab-rules" role="tab" aria-selected="false" aria-controls="view-rules" data-view="rules" tabindex="-1">规则</button>
+      </nav>
+    </div>
+    <div class="header-right">
+      <span class="badge" id="statusBadge">运行中</span>
+      <button class="sm" onclick="reload()">重载配置</button>
+      <button class="sm" onclick="testAll()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>一键测试</button>
+      <button class="sm primary" onclick="openAdd()">+ 添加 Provider</button>
+    </div>
+  </div>
+</header>
+<main>
+  <section class="view is-active" id="view-run" data-view="run" role="tabpanel" aria-labelledby="tab-run">
+  <div class="card">
+    <h2>Go 服务端额度 <span class="hint-inline" id="quotaPlan"></span>
+      <span><button class="sm" onclick="loadQuota(true)">刷新</button></span>
+    </h2>
+    <div class="hint-inline" style="margin-bottom:12px">实时读取 <code>GET /zen/go/v1/usage</code>（使用 opencode-go 的 API key），显示服务端 rolling / weekly / monthly 百分比和重置时间。下方「本地按模型累计」仅统计本网关流量，仅供参考。</div>
+    <div class="quota-summary" id="quotaSummary"></div>
+    <div id="quotaError" class="empty" style="margin-top:10px"></div>
+    <details style="margin-top:16px">
+      <summary class="hint-inline" style="cursor:pointer">本地按模型累计（参考）</summary>
+      <div id="quotaTable" style="margin-top:10px"></div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>总览</h2>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="card">
+    <h2>Zen 余额（服务端） <span class="hint-inline" id="zenSource"></span></h2>
+    <div class="hint-inline" style="margin-bottom:12px">读取 OpenCode Console 的真实预付费余额和月度预算（<code>/console/api/billing/status</code>、<code>/console/api/budgets/org</code>）。Go 额度接口只返回订阅窗口，不返回 Zen 余额，所以此项需要配置 Console 会话 Cookie。</div>
+    <div class="quota-summary" id="zenSummary"></div>
+    <details style="margin-top:14px">
+      <summary class="hint-inline" style="cursor:pointer">配置 Console 会话 Cookie</summary>
+      <div class="field" style="margin-top:10px">
+        <label for="zenCookie">会话 Cookie</label>
+        <textarea id="zenCookie" rows="3" placeholder="__Host-console_session=...; auth=..."></textarea>
+        <div class="hint">浏览器登录 opencode.ai 后，从 DevTools → Application → Cookies → https://opencode.ai 复制；只保存在本机 gateway_config.json，不会发送给客户端。</div>
+      </div>
+      <div class="field">
+        <label for="zenOrg">org_id（可选，留空自动发现）</label>
+        <input id="zenOrg" placeholder="org_...">
+      </div>
+      <div class="row">
+        <button class="sm primary" onclick="saveZen()">保存并刷新</button>
+        <button class="sm" onclick="clearZen()">清除 Cookie</button>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>实时日志 <button class="sm" onclick="loadLogs()">刷新</button></h2>
+    <div class="log" id="log"></div>
+  </div>
+  </section>
+  <section class="view" id="view-usage" data-view="usage" role="tabpanel" aria-labelledby="tab-usage" hidden>
+  <div class="card">
+    <h2>Token 用量 <span class="hint-inline" id="usageSince"></span>
+      <span>
+        <button class="sm" onclick="loadUsage()">刷新</button>
+        <button class="sm danger" onclick="resetUsage()">重置</button>
+      </span>
+    </h2>
+    <div class="stats" id="usageTotals"></div>
+    <div id="liveTps" class="hint-inline" style="margin-top:10px"></div>
+    <div style="margin-top:18px">
+      <h2 class="sub-h">按厂商</h2>
+      <div id="usageVendors"></div>
+      <div class="hint-inline" style="margin-top:6px">厂商按模型名推断（claude→Anthropic、glm→智谱、gemini→Google…）；只统计经过网关的流量，OpenCode 其它客户端的用量无法计入 token。</div>
+    </div>
+    <div style="margin-top:18px">
+      <h2 class="sub-h">按 Provider</h2>
+      <div id="usageProviders"></div>
+    </div>
+    <div style="margin-top:18px">
+      <h2 class="sub-h">按模型</h2>
+      <div id="usageModels"></div>
+    </div>
+  </div>
+
+  </section>
+  <section class="view" id="view-upstream" data-view="upstream" role="tabpanel" aria-labelledby="tab-upstream" hidden>
+  <div class="card">
+    <h2>Providers</h2>
+    <div id="providers"></div>
+  </div>
+
+  <div class="card">
+    <h2>模型能力 <span class="hint-inline">来自 model_meta，可在编辑 Provider 中修改</span></h2>
+    <div id="modelTable"></div>
+  </div>
+
+  </section>
+  <section class="view" id="view-rules" data-view="rules" role="tabpanel" aria-labelledby="tab-rules" hidden>
+  <div class="card">
+    <h2>智能路由 <span class="hint-inline">智能别名 / 故障转移 / 失败冷却</span>
+      <span><button class="sm" onclick="loadRouting()">刷新</button></span>
+    </h2>
+    <div class="hint-inline" style="margin-bottom:10px">
+      <b>智能别名</b>：客户端请求 <code>smart</code> / <code>cheap</code> / <code>vision</code> / <code>coding</code> 时，按候选顺序自动选路，跳过冷却中的模型。<br>
+      <b>故障转移</b>：主模型返回 <code>retry_on</code> 中的错误码时，自动尝试候选列表里的下一个模型；全部失败后返回最后一次上游错误。<br>
+      <b>冷却</b>：模型失败后 <code>cooldown_seconds</code> 秒内不再优先选它，成功后自动恢复。
+    </div>
+    <div class="field">
+      <label for="routingJson">路由配置（JSON）</label>
+      <textarea id="routingJson" rows="12"></textarea>
+    </div>
+    <div class="row">
+      <button class="sm primary" onclick="saveRouting()">保存路由</button>
+      <button class="sm" onclick="resetRouting()">恢复默认</button>
+    </div>
+    <div id="routingHealth" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card">
+    <h2>客户端接入密钥 <span class="hint-inline">客户端连网关用这个 key；上游 provider key 由网关管理</span></h2>
+    <div class="field checks">
+      <label><input type="checkbox" id="authEnabled"> 启用鉴权（关闭后任何人可访问）</label>
+    </div>
+    <div class="field">
+      <label for="authKeys">允许的 key（每行一个）</label>
+      <textarea id="authKeys" rows="3" placeholder="sk-gw-..."></textarea>
+      <div class="hint">OpenAI 客户端：Authorization: Bearer &lt;key&gt; · Anthropic 客户端：x-api-key: &lt;key&gt;</div>
+    </div>
+    <div class="row">
+      <button class="sm primary" onclick="saveAuth()">保存密钥</button>
+      <button class="sm" onclick="genKey()">生成随机 key</button>
+      <button class="sm" onclick="copyKey()">复制第一个</button>
+    </div>
+  </div>
+
+  </section>
+</main>
+
+<div class="modal-mask" id="modalMask">
+  <div class="modal">
+    <h3 id="modalTitle">添加 Provider</h3>
+    <div class="field"><label for="fName">名称</label><input id="fName" placeholder="opencode-go"></div>
+    <div class="field"><label for="fUrl">Base URL（OpenAI）</label><input id="fUrl" placeholder="https://api.example.com/v1"><div class="hint">OpenAI 兼容端点，不带 /chat/completions</div></div>
+    <div class="field"><label for="fAnthropicUrl">Anthropic Base URL（可选）</label><input id="fAnthropicUrl" placeholder="https://api.example.com/anthropic/v1"><div class="hint">不带 /messages；留空则不支持该 provider 的 /v1/messages（opencode.ai 可自动推导）</div></div>
+    <div class="field"><label for="fKey">API Key（OpenAI）</label><input id="fKey" placeholder="sk-..."></div>
+    <div class="field"><label for="fAnthropicKey">Anthropic API Key（可选）</label><input id="fAnthropicKey" placeholder="留空则复用上面的 API Key"><div class="hint">/v1/messages 优先使用这个 key；留空则回落到 OpenAI API Key</div></div>
+    <div class="field"><label for="fModels">模型列表（每行一个）</label><textarea id="fModels" rows="5" placeholder="gpt-6-luna&#10;glm-5.3-flash"></textarea></div>
+    <div class="field"><label for="fProxyModels">走代理的模型（每行一个，留空则全部直连）</label><textarea id="fProxyModels" rows="3" placeholder="gpt-6-luna"></textarea></div>
+    <div class="field"><label for="fHeaders">自定义请求头（JSON，可选）</label><textarea id="fHeaders" rows="2" placeholder='{"x-opencode-session":"{session}"}'></textarea><div class="hint">{session} 会自动替换为会话 ID</div></div>
+    <div class="field checks">
+      <label><input type="checkbox" id="fNeedsSession"> 需要 session 头（opencode）</label>
+      <label><input type="checkbox" id="fUseProxy"> 全部模型走代理</label>
+    </div>
+    <div class="field"><label for="fModelMap">模型 ID 映射（JSON，可选）</label><textarea id="fModelMap" rows="2" placeholder='{"gpt-6-luna-responses":"gpt-6-luna"}'></textarea></div>
+    <div class="field"><label for="fMeta">模型元数据（JSON，可选）</label><textarea id="fMeta" rows="4" placeholder='{"gpt-6-luna":{"context":1050000,"input":922000,"output":128000,"images":true,"tools":true,"reasoning":["low","high"]}}'></textarea><div class="hint">用于管理端展示上下文 / 多模态 / 工具 / 思考强度；编辑 Provider 时会保留已有元数据</div></div>
+    <div class="modal-foot">
+      <button onclick="closeModal()">取消</button>
+      <button class="primary" onclick="saveProvider()">保存</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+window.onerror = function(msg, url, line, col, err){
+  var box = document.getElementById('errbox') || document.body;
+  box.innerHTML = '<pre style="padding:24px;color:#dc2626;font:13px/1.6 monospace;white-space:pre-wrap;word-break:break-all">⚠ 脚本错误\n' +
+    'message: ' + msg + '\nline: ' + line + ':' + (col||0) +
+    (err && err.stack ? '\n\nstack:\n' + err.stack : '') + '</pre>';
+  return false;
+};
+window.addEventListener('unhandledrejection', function(e){
+  var box = document.getElementById('errbox') || document.body;
+  box.innerHTML = '<pre style="padding:24px;color:#d97706;font:13px/1.6 monospace;white-space:pre-wrap">⚠ 未捕获的 Promise 错误\n' + (e.reason && (e.reason.stack || e.reason.message || String(e.reason))) + '</pre>';
+});
+</script>
+<script>
+let CFG = null;
+let CFG_REVISION = '';
+let STATUS = null;
+let editingIndex = -1;
+const DEFAULT_ROUTING = {"enabled": true, "fallbacks": {"gpt-6-luna": ["gpt-6-luna", "gpt-5.6-luna", "glm-5.3-flash", "LongCat-2.5-Preview"], "gpt-5.6-luna": ["gpt-5.6-luna", "glm-5.3-flash", "LongCat-2.5-Preview"], "deepseek-v4.1-flash": ["deepseek-v4.1-flash", "glm-5.3-flash", "LongCat-2.5-Preview"], "claude-haiku-5-5": ["claude-haiku-5-5", "glm-5.3-flash"], "glm-5.3-flash": ["glm-5.3-flash", "deepseek-v4.1-flash", "LongCat-2.5-Preview"]}, "smart_aliases": {"smart": ["gpt-6-luna", "glm-5.3-flash", "deepseek-v4.1-flash", "LongCat-2.5-Preview"], "cheap": ["glm-5.3-flash", "deepseek-v4.1-flash", "LongCat-2.5-Preview"], "vision": ["gpt-6-luna", "gemini-4-argon", "claude-haiku-5-5"], "coding": ["gpt-6-luna", "deepseek-v4.1-flash", "kimi-k3.1-pro"]}, "retry_on": [400, 402, 403, 404, 408, 429, 500, 502, 503, 504, 529], "max_attempts": 4, "cooldown_seconds": 300};
+
+async function api(path, opts){
+  const r = await fetch(path, Object.assign({cache:'no-store'}, opts||{}));
+  if(path === '/admin/api/config' && (!opts || !opts.method || opts.method === 'GET')){
+    const rev = r.headers.get('X-Config-Revision');
+    if(rev) CFG_REVISION = rev;
+  }
+  const t = await r.text();
+  try{ return JSON.parse(t); }catch(e){ return {raw:t}; }
+}
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 2200);
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function fillZenForm(){
+  const z = (CFG && CFG.zen_console) || {};
+  const cookie = document.getElementById('zenCookie');
+  const org = document.getElementById('zenOrg');
+  if(cookie) cookie.value = z.session_cookie || '';
+  if(org) org.value = z.org_id || '';
+}
+function fillRoutingForm(){
+  const ta = document.getElementById('routingJson');
+  if(ta) ta.value = JSON.stringify((CFG && CFG.routing) || {}, null, 2);
+}
+async function loadRouting(){
+  try{
+    const d = await api('/admin/api/routing');
+    const box = document.getElementById('routingHealth');
+    if(!box) return;
+    const h = d.health || [];
+    box.innerHTML = h.length
+      ? '<div class="hint-inline">冷却中：'+h.map(x=>esc(x.key)+'（'+esc(x.status)+'，'+Math.max(0,Math.round(Date.now()/1000 - Number(x.ts)))+'s 前）').join('、')+'</div>'
+      : '<div class="hint-inline">当前没有模型处于冷却期。</div>';
+  }catch(e){}
+}
+async function saveRouting(){
+  let val;
+  try{ val = JSON.parse(document.getElementById('routingJson').value); }
+  catch(e){ toast('JSON 格式错误：'+(e.message||e)); return; }
+  CFG.routing = val;
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r || r.ok === false){ toast('保存失败：'+((r&&r.error)||'未知错误')); return; }
+  await api('/admin/api/reload',{method:'POST'});
+  await load();
+  await loadRouting();
+  toast('路由配置已保存');
+}
+async function resetRouting(){
+  if(!confirm('恢复默认路由配置？')) return;
+  CFG.routing = JSON.parse(JSON.stringify(DEFAULT_ROUTING));
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r || r.ok === false){ toast('保存失败：'+((r&&r.error)||'未知错误')); return; }
+  await api('/admin/api/reload',{method:'POST'});
+  await load();
+  await loadRouting();
+  toast('已恢复默认路由');
+}
+async function saveZen(){
+  const cookie = document.getElementById('zenCookie').value.trim();
+  const org = document.getElementById('zenOrg').value.trim();
+  CFG.zen_console = {enabled: !!cookie, session_cookie: cookie, org_id: org};
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r || r.ok === false){ toast('保存失败：'+((r&&r.error)||'未知错误')); return; }
+  await api('/admin/api/reload',{method:'POST'});
+  await load();
+  await loadQuota(true);
+  toast('Zen 配置已保存');
+}
+async function clearZen(){
+  CFG.zen_console = {enabled:false, session_cookie:'', org_id:''};
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r || r.ok === false){ toast('清除失败：'+((r&&r.error)||'未知错误')); return; }
+  await api('/admin/api/reload',{method:'POST'});
+  await load();
+  await loadQuota(true);
+  toast('已清除 Zen Cookie');
+}
+async function load(){
+  const cfg = await api('/admin/api/config');
+  CFG = cfg;
+  try{ STATUS = await api('/admin/api/status'); }catch(e){ STATUS = null; }
+  fillZenForm();
+  fillRoutingForm();
+  loadRouting();
+  render();
+  loadLogs();
+  loadUsage();
+  loadQuota();
+}
+function fmtCount(v){ return Number(v||0).toLocaleString('en-US'); }
+function fmtRate(v){ return v == null ? '—' : Number(v).toFixed(1)+'%'; }
+function fmtTps(v){ return v == null ? '—' : Number(v).toFixed(1)+' /s'; }
+function fmtTokens(v){
+  if(v == null || v === '') return '—';
+  const n = Number(v);
+  if(!isFinite(n)) return '—';
+  if(Math.abs(n) < 1000000) return Math.round(n).toLocaleString('en-US');
+  const units = [
+    [1e12, '万亿'], [1e11, '千亿'], [1e10, '百亿'],
+    [1e9, '十亿'], [1e8, '亿'], [1e7, '千万'], [1e6, '百万']
+  ];
+  for(const unit of units){
+    if(Math.abs(n) >= unit[0]){
+      const text = (n/unit[0]).toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1');
+      return text+' '+unit[1];
+    }
+  }
+  return Math.round(n).toLocaleString('en-US');
+}
+function money(v){
+  if(v == null) return '—';
+  const n = Number(v);
+  if(n === 0) return '$0.00';
+  if(n < 0.0001) return '$'+n.toFixed(6);
+  if(n < 0.01) return '$'+n.toFixed(4);
+  if(n < 1) return '$'+n.toFixed(3);
+  return '$'+n.toFixed(2);
+}
+function renderPrice(p){
+  if(!p) return '<span class="empty">未录</span>';
+  if(p.unit === 'per_minute') return '<span title="按分钟计费">'+money(p.per_minute)+'/min</span>';
+  return '<span title="每 1M tokens · USD">I '+money(p.input)+' / O '+money(p.output)+'<br>R '+money(p.cache_read)+' / W '+money(p.cache_write)+'</span>';
+}
+function renderModelTable(providers){
+  const rows = [];
+  (providers||[]).forEach(p=>{
+    const metas = p.model_meta || {};
+    const px = new Set(p.proxy_models||[]);
+    (p.models||[]).forEach(m=>{
+      const mt = metas[m] || {};
+      rows.push('<tr>'+
+        '<td class="mono">'+esc(m)+(mt.free?' 🎁':'')+'</td>'+
+        '<td>'+esc(p.name)+'</td>'+
+        '<td class="num">'+fmtTokens(mt.context||mt.input)+'</td>'+
+        '<td class="num">'+fmtTokens(mt.output)+'</td>'+
+        '<td class="center">'+(mt.images===true?'✅':mt.images===false?'❌':'—')+'</td>'+
+        '<td class="center">'+(mt.tools===true?'✅':mt.tools===false?'❌':'—')+'</td>'+
+        '<td>'+esc((mt.reasoning||[]).join(' / ')||'—')+'</td>'+ 
+        '<td>'+renderPrice(mt.pricing)+'</td>'+ 
+        '<td>'+((px.has(m)||p.use_proxy)?'🌐 代理':'直连')+'</td>'+
+      '</tr>');
+    });
+  });
+  const box = document.getElementById('modelTable');
+  if(!rows.length){ box.innerHTML = '<div class="empty">暂无模型元数据</div>'; return; }
+  box.innerHTML = '<div class="table-wrap"><table><thead><tr>'+
+    '<th>模型</th><th>Provider</th><th>上下文</th><th>输出上限</th>'+
+    '<th>多模态</th><th>工具</th><th>思考强度</th><th>价格/1M Token<br><small>I/O · Cache R/W</small></th><th>出口</th>'+ 
+    '</tr></thead><tbody>'+rows.join('')+'</tbody></table></div>';
+}
+function renderAuth(){
+  const a = CFG.client_auth || {};
+  document.getElementById('authEnabled').checked = !!a.enabled;
+  document.getElementById('authKeys').value = (a.keys||[]).join('\n');
+}
+async function saveAuth(){
+  const enabled = document.getElementById('authEnabled').checked;
+  const keys = parseLines(document.getElementById('authKeys').value);
+  if(enabled && !keys.length){ toast('启用鉴权时至少填一个 key'); return; }
+  CFG.client_auth = {enabled: enabled, keys: keys};
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r.ok){ toast('保存失败：'+(r.error||'未知错误')); await load(); return; }
+  await load(); toast('接入密钥已保存');
+}
+function genKey(){
+  let hex;
+  try{
+    const arr = new Uint8Array(16); crypto.getRandomValues(arr);
+    hex = Array.prototype.map.call(arr, b=>b.toString(16).padStart(2,'0')).join('');
+  }catch(e){
+    hex = Math.random().toString(16).slice(2).padEnd(32,'0').slice(0,32);
+  }
+  document.getElementById('authKeys').value = 'sk-gw-'+hex;
+  document.getElementById('authEnabled').checked = true;
+  toast('已生成，记得点保存');
+}
+async function copyKey(){
+  const key = parseLines(document.getElementById('authKeys').value)[0];
+  if(!key){ toast('没有可复制的 key'); return; }
+  try{ await navigator.clipboard.writeText(key); toast('已复制'); }
+  catch(e){ toast('复制失败，请手动选择'); }
+}
+function render(){
+  renderAuth();
+  const providers = CFG.providers||[];
+  const totalModels = providers.reduce((a,p)=>a+(p.models||[]).length,0);
+  const proxyModels = providers.reduce((a,p)=>a+(p.proxy_models||[]).length,0);
+  const lan = (STATUS && STATUS.lan_urls) || [];
+  const listenHost = (CFG.listen||{}).host || '127.0.0.1';
+  const listenPort = (CFG.listen||{}).port || 8787;
+  const localBase = 'http://' + (listenHost==='0.0.0.0'?'127.0.0.1':listenHost) + ':' + listenPort;
+  const bases = lan.length ? lan : [localBase];
+  const endpointLines = (suffix) => bases.map(b=>esc(b+suffix)).join('<br>');
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="label">Providers</div><div class="value">${providers.length}</div></div>
+    <div class="stat"><div class="label">模型总数</div><div class="value">${totalModels}</div></div>
+    <div class="stat"><div class="label">走代理模型</div><div class="value">${proxyModels} <small>/ ${totalModels}</small></div></div>
+    <div class="stat"><div class="label">代理地址</div><div class="value" style="font-size:14px;font-family:var(--mono)">${esc(CFG.proxy||'（直连）')}</div></div>
+    <div class="stat"><div class="label">监听</div><div class="value" style="font-size:14px;font-family:var(--mono)">${esc(listenHost)}:${esc(listenPort)}${lan.length?' <small>局域网</small>':' <small>仅本机</small>'}</div></div>
+    <div class="stat"><div class="label">OpenAI 端点</div><div class="value" style="font-size:12px;font-family:var(--mono);word-break:break-all">${endpointLines('/v1')}</div></div>
+    <div class="stat"><div class="label">Anthropic 端点</div><div class="value" style="font-size:12px;font-family:var(--mono);word-break:break-all">${endpointLines('')}</div></div>
+  `;
+  renderModelTable(providers);
+  const box = document.getElementById('providers');
+  if(!providers.length){ box.innerHTML = '<div class="empty">还没有 Provider，点右上角添加。</div>'; return; }
+  box.innerHTML = providers.map((p,i)=>{
+    const models = p.models||[];
+    const px = new Set(p.proxy_models||[]);
+    const metas = p.model_meta || {};
+    const tags = models.map(m=>{
+      const mt = metas[m];
+      const tip = ['点击测试该模型'];
+      if(mt){
+        const ctxIn = mt.input || mt.context || '?';
+        tip.push(`上下文 ${ctxIn} / ${mt.output || '?'}`);
+        tip.push(`多模态 ${mt.images===true?'✅':mt.images===false?'❌':'—'}   工具 ${mt.tools===true?'✅':mt.tools===false?'❌':'—'}`);
+        if(mt.reasoning && mt.reasoning.length) tip.push(`思考 ${mt.reasoning.join(' / ')}`);
+        if(mt.pricing){
+          if(mt.pricing.unit==='per_minute') tip.push(`价格 $${mt.pricing.per_minute}/分钟`);
+          else tip.push(`价格 输入 $${mt.pricing.input}/1M · 输出 $${mt.pricing.output}/1M`);
+        }
+        if(mt.free) tip.push('免费模型');
+      }
+      return `<span class="tag${px.has(m)?' proxy':''}" data-model="${esc(m)}" onclick="testModel(this)" title="${esc(tip.join('\n'))}">${esc(m)}${mt&&mt.free?' 🎁':''}${px.has(m)?' 🌐':''}</span>`;
+    }).join('');
+    return `<div class="provider">
+      <div class="provider-head">
+        <div class="provider-name"><span class="dot"></span>${esc(p.name)}</div>
+        <div class="row">
+          <button class="sm" onclick="testProvider(${i})">测试</button>
+          <button class="sm" onclick="openEdit(${i})">编辑</button>
+          <button class="sm danger" onclick="delProvider(${i})">删除</button>
+        </div>
+      </div>
+      <div class="provider-meta">openai: ${esc(p.base_url)}</div>
+      ${p.anthropic_base_url?`<div class="provider-meta">anthropic: ${esc(p.anthropic_base_url)} · key: ${p.anthropic_api_key?esc((p.anthropic_api_key||'').slice(0,10))+'…':'复用 OpenAI key'}</div>`:''}
+      <div class="provider-meta">key: ${esc((p.api_key||'').slice(0,10))}…${p.needs_session?' · needs_session':''}${p.use_proxy?' · 全代理':''}</div>
+      <div class="tags">${tags||'<span class="empty">无模型</span>'}</div>
+    </div>`;
+  }).join('');
+}
+async function loadLogs(){
+  const d = await api('/admin/api/logs?lines=150');
+  const el = document.getElementById('log');
+  el.textContent = (d.lines||[]).join('');
+  el.scrollTop = el.scrollHeight;
+}
+function renderUsageTable(items, type){
+  if(!items || !items.length) return '<div class="empty">暂无用量记录</div>';
+  const isModel = type === 'model';
+  const isVendor = type === 'vendor';
+  const columns = isModel
+    ? '<th>模型</th><th>厂商</th><th>Provider</th>'
+    : isVendor
+      ? '<th>厂商</th>'
+      : '<th>Provider</th>';
+  const rows = items.map(x=>{
+    const identity = isModel
+      ? '<td class="mono">'+esc(x.model||'')+'</td><td>'+esc(x.vendor||'')+'</td><td>'+esc(x.provider||'')+'</td>'
+      : isVendor
+        ? '<td>'+esc(x.vendor||'')+'</td>'
+        : '<td>'+esc(x.name||'')+'</td>';
+    return '<tr>'+identity+
+      '<td class="num">'+fmtCount(x.requests)+'</td>'+ 
+      '<td class="num">'+fmtTokens(x.input_tokens)+'</td>'+ 
+      '<td class="num">'+fmtTokens(x.output_tokens)+'</td>'+ 
+      '<td class="num">'+fmtTokens(x.total_tokens)+'</td>'+ 
+      '<td class="num">'+fmtTokens(x.cached_tokens)+'</td>'+ 
+      '<td class="num">'+fmtRate(x.cache_hit_rate)+'</td>'+ 
+      '<td class="num">'+fmtTokens(x.reasoning_tokens)+'</td>'+ 
+      '<td class="num">'+fmtTps(x.avg_tps)+'</td>'+
+      '<td class="num">$'+(Number(x.cost||0).toFixed(6))+'</td>'+ 
+      '<td class="num">$'+(Number(x.list_cost||0).toFixed(6))+'</td>'+ 
+      '<td class="num">'+fmtCount(x.errors)+'</td>'+  
+      '<td class="num">'+fmtCount(x.usage_missing)+'</td>'+ 
+      '<td class="num">'+(x.requests?Math.round(Number(x.latency_ms||0)/Number(x.requests||1))+' ms':'—')+'</td>'+ 
+      '<td>'+esc(x.last_used||'—')+'</td></tr>';
+  }).join('');
+  return '<div class="table-wrap"><table><thead><tr>'+columns+
+    '<th>请求</th><th>输入 Token</th><th>输出 Token</th><th>总 Token</th>'+ 
+    '<th>缓存读</th><th>缓存命中率</th><th>推理 Token</th><th>平均 TPS</th><th>实扣（$）</th><th>标价估算（$）</th><th>错误</th><th>无用量</th><th>平均延迟</th><th>最近调用</th>'+ 
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+async function loadUsage(){
+  try{
+    const d = await api('/admin/api/usage');
+    const t = d.totals || {};
+    const live = d.live || {};
+    const goStat = (d.providers||[]).find(p=>p.name==='opencode-go') || {};
+    document.getElementById('usageSince').textContent = d.since ? ('统计起始 '+d.since+' · 更新 '+(d.updated||'—')) : '';
+    document.getElementById('usageTotals').innerHTML = `
+      <div class="stat"><div class="label">请求数</div><div class="value">${fmtCount(t.requests)}</div></div>
+      <div class="stat"><div class="label">Go 本地 Token</div><div class="value">${fmtTokens(goStat.total_tokens)}</div></div>
+      <div class="stat"><div class="label">实时 TPS</div><div class="value">${fmtTps(live.output_tps)} <small>输出 / ${live.window_seconds||60}s</small></div></div>
+      <div class="stat"><div class="label">输入 Token</div><div class="value">${fmtTokens(t.input_tokens)}</div></div>
+      <div class="stat"><div class="label">输出 Token</div><div class="value">${fmtTokens(t.output_tokens)}</div></div>
+      <div class="stat"><div class="label">总 Token</div><div class="value">${fmtTokens(t.total_tokens)}</div></div>
+      <div class="stat"><div class="label">缓存读 Token</div><div class="value">${fmtTokens(t.cached_tokens)}</div></div>
+      <div class="stat"><div class="label">缓存命中率</div><div class="value">${fmtRate(t.cache_hit_rate)}</div></div>
+      <div class="stat"><div class="label">推理 Token</div><div class="value">${fmtTokens(t.reasoning_tokens)}</div></div>
+      <div class="stat"><div class="label">上游实扣</div><div class="value">$${Number(t.cost||0).toFixed(6)}</div></div>
+      <div class="stat"><div class="label">按模型价估算</div><div class="value">$${Number(t.list_cost||0).toFixed(6)}</div></div>
+      <div class="stat"><div class="label">用量缺失请求</div><div class="value">${fmtCount(t.usage_missing)}</div></div>`;
+    const liveRows = (live.by_model||[]).map(x=>esc(x.model)+' '+fmtTps(x.output_tps)).join(' · ');
+    document.getElementById('liveTps').innerHTML = Number(live.requests||0) > 0
+      ? '近 '+(live.span_seconds||live.window_seconds||60)+' 秒：输出 '+fmtTps(live.output_tps)
+        +' · 输入 '+fmtTps(live.input_tps)+' · 合计 '+fmtTps(live.total_tps)
+        +'（'+fmtCount(live.requests)+' 个请求）'
+        + (liveRows ? '<br>按模型：'+liveRows : '')
+      : '近 '+(live.window_seconds||60)+' 秒暂无 agent 请求。';
+    document.getElementById('usageVendors').innerHTML = renderUsageTable(d.vendors||[], 'vendor');
+    document.getElementById('usageProviders').innerHTML = renderUsageTable(d.providers||[], 'provider');
+    document.getElementById('usageModels').innerHTML = renderUsageTable(d.models||[], 'model');
+  }catch(e){
+    document.getElementById('usageTotals').innerHTML = '<div class="empty">读取用量失败：'+esc(e.message||e)+'</div>';
+  }
+}
+async function resetUsage(){
+  if(!confirm('确定重置所有 Token 用量统计？此操作不可撤销。')) return;
+  const r = await api('/admin/api/usage/reset',{method:'POST'});
+  if(!r.ok){ toast('重置失败'); return; }
+  await loadUsage(); toast('用量统计已重置');
+}
+function quotaBar(used, limit, percent){
+  const pct = Math.max(0, Math.min(100, Number(percent||0)));
+  let cls = 'progress';
+  if(percent >= 90) cls += ' danger'; else if(percent >= 70) cls += ' warn';
+  const text = (limit == null) ? '∞' : (money(used)+' / '+money(limit)+' · '+Number(percent||0).toFixed(1)+'%');
+  return '<div class="quota-line"><div class="'+cls+'" style="flex:1"><i style="width:'+pct+'%"></i></div><span class="quota-text">'+text+'</span></div>';
+}
+function fmtReset(s){
+  if(!s) return '—';
+  const d = new Date(s);
+  if(isNaN(d.getTime())) return s;
+  return d.toLocaleString('zh-CN',{hour12:false});
+}
+function fmtHours(h){
+  h = Number(h||0);
+  if(h >= 48) return (h/24).toFixed(1)+' 天';
+  if(h >= 1) return h.toFixed(1)+' 小时';
+  return Math.max(1, Math.round(h*60))+' 分钟';
+}
+function serverQuotaCard(label, data, eta){
+  data = data || {};
+  const pct = Math.max(0, Math.min(100, Number(data.percent||0)));
+  let cls = 'progress';
+  if(data.percent >= 90) cls += ' danger'; else if(data.percent >= 70) cls += ' warn';
+  const status = (data.status && data.status !== 'ok') ? data.status : '';
+  let etaText = '正在采样当前速度…';
+  if(eta){
+    if(eta.status === 'exhausted') etaText = '已用完';
+    else if(eta.status === 'flat') etaText = '用量未增长，暂无预计';
+    else if(eta.status === 'ok'){
+      const speed = eta.basis === 'recent' ? '按近期速度' : '按本窗口平均速度';
+      if(eta.before_reset === false){
+        etaText = '按当前速度，重置前不会用完（'+speed+'）';
+      }else{
+        etaText = '预计 '+fmtHours(eta.hours)+' 后用完 · '+esc(eta.at||'')+'（'+speed+'）';
+      }
+    }
+  }
+  const rateText = (eta && eta.rate_per_hour > 0)
+    ? ' · +'+Number(eta.rate_per_hour).toFixed(2)+'%/h' : '';
+  return '<div class="quota-card"><div class="label"><span>'+esc(label)+'</span><span>'+esc(status)+'</span></div>'+
+    '<div class="value">'+Number(data.percent||0)+'%</div>'+
+    '<div class="'+cls+'"><i style="width:'+pct+'%"></i></div>'+
+    '<div class="hint-inline" style="margin-top:6px">重置：'+esc(fmtReset(data.resetsAt))+'</div>'+
+    '<div class="hint-inline" style="margin-top:3px">'+esc(etaText)+rateText+'</div></div>';
+}
+function fmtUsd(v){ return v == null ? '—' : '$'+Number(v).toFixed(2); }
+function zenCard(z){
+  if(!z || !z.configured){
+    return '<div class="empty" style="grid-column:1/-1">未启用 Zen 余额监控。在 <code>gateway_config.json</code> 添加 <code>zen_console.enabled=true</code> 并填入 Console 会话 Cookie 后即可显示真实余额。</div>';
+  }
+  if(!z.ok){
+    return '<div class="empty" style="grid-column:1/-1">Zen 余额读取失败：'+esc(z.error||'未知错误')+
+      '<br>如果提示 401/403，通常是 Console 会话过期：重新登录 opencode.ai，复制新的 Cookie 更新 <code>zen_console.session_cookie</code>。</div>';
+  }
+  const spent = z.monthly_spent_usd, limit = z.monthly_limit_usd;
+  const pct = (spent != null && limit) ? Math.max(0, Math.min(100, spent/limit*100)) : null;
+  let budget = '';
+  if(limit != null){
+    let cls = 'progress';
+    if(pct >= 90) cls += ' danger'; else if(pct >= 70) cls += ' warn';
+    budget = '<div class="quota-card"><div class="label"><span>本月支出</span><span>'+fmtUsd(spent)+' / '+fmtUsd(limit)+'</span></div>'+
+      '<div class="value">'+(pct==null?'—':pct.toFixed(1)+'%')+'</div>'+
+      '<div class="'+cls+'"><i style="width:'+(pct||0)+'%"></i></div>'+
+      '<div class="hint-inline" style="margin-top:6px">重置：'+esc(fmtReset(z.resets_at))+'</div></div>';
+  }
+  return '<div class="quota-card"><div class="label"><span>Zen 余额</span><span>'+esc(z.mode||z.billing_mode||'')+'</span></div>'+
+    '<div class="value">'+fmtUsd(z.balance_usd)+'</div>'+
+    '<div class="hint-inline" style="margin-top:6px">可用：'+fmtUsd(z.available_usd)+' · 更新：'+esc((z.fetched_at||'').replace('T',' '))+'</div></div>'+budget;
+}
+async function loadQuota(force){
+  try{
+    const d = await api('/admin/api/quota'+(force?'?refresh=1':''));
+    const s = d.usage || {};
+    document.getElementById('quotaPlan').textContent =
+      (d.plan||'Go') + (d.fetched_at ? ' · '+d.fetched_at.replace('T',' ') : '');
+    const eta = d.eta || {};
+    document.getElementById('quotaSummary').innerHTML =
+      serverQuotaCard('5 小时滚动', s.rolling, eta.rolling) +
+      serverQuotaCard('本周（UTC）', s.weekly, eta.weekly) +
+      serverQuotaCard('本月', s.monthly, eta.monthly);
+    document.getElementById('quotaError').textContent = d.ok ? '' :
+      ('服务端额度读取失败：'+(d.error||'未知错误')+'（下方为本地参考）');
+    document.getElementById('zenSummary').innerHTML = zenCard(d.zen);
+
+    const local = d.local || {};
+    const rows = (local.models||[]).map(x=>{
+      if(x.unlimited){
+        return '<tr><td class="mono">'+esc(x.model)+'</td><td>'+esc(x.provider)+'</td>'+
+          '<td colspan="3" class="center">∞ 无限额度</td></tr>';
+      }
+      return '<tr><td class="mono">'+esc(x.model)+'</td><td>'+esc(x.provider)+'</td>'+
+        '<td class="quota-cell">'+quotaBar(x.five_hour.used,x.five_hour.limit,x.five_hour.percent)+'</td>'+
+        '<td class="quota-cell">'+quotaBar(x.week.used,x.week.limit,x.week.percent)+'</td>'+
+        '<td class="quota-cell">'+quotaBar(x.month.used,x.month.limit,x.month.percent)+'</td></tr>';
+    }).join('');
+    document.getElementById('quotaTable').innerHTML = rows
+      ? '<div class="table-wrap"><table><thead><tr><th>模型</th><th>Provider</th><th>5 小时</th><th>近 7 天</th><th>本月</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+      : '<div class="empty">暂无本地额度数据。发起一次 OpenCode Go 请求后会自动累计。</div>';
+  }catch(e){
+    document.getElementById('quotaSummary').innerHTML = '<div class="empty">读取额度失败：'+esc(e.message||e)+'</div>';
+  }
+}
+async function reload(){
+  await api('/admin/api/reload',{method:'POST'});
+  await load();
+  toast('配置已重载');
+}
+function openAdd(){ editingIndex=-1; document.getElementById('modalTitle').textContent='添加 Provider';
+  ['fName','fUrl','fAnthropicUrl','fKey','fAnthropicKey','fModels','fProxyModels','fHeaders','fModelMap','fMeta'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('fNeedsSession').checked=false; document.getElementById('fUseProxy').checked=false;
+  document.getElementById('modalMask').classList.add('show');
+}
+function openEdit(i){ const p=CFG.providers[i]; editingIndex=i; document.getElementById('modalTitle').textContent='编辑 Provider';
+  document.getElementById('fName').value=p.name||'';
+  document.getElementById('fUrl').value=p.base_url||'';
+  document.getElementById('fAnthropicUrl').value=p.anthropic_base_url||'';
+  document.getElementById('fKey').value=p.api_key||'';
+  document.getElementById('fAnthropicKey').value=p.anthropic_api_key||'';
+  document.getElementById('fModels').value=(p.models||[]).join('\n');
+  document.getElementById('fProxyModels').value=(p.proxy_models||[]).join('\n');
+  document.getElementById('fHeaders').value=p.headers?JSON.stringify(p.headers,null,2):'';
+  document.getElementById('fNeedsSession').checked=!!p.needs_session;
+  document.getElementById('fUseProxy').checked=!!p.use_proxy;
+  document.getElementById('fModelMap').value=p.model_map?JSON.stringify(p.model_map,null,2):'';
+  document.getElementById('fMeta').value=p.model_meta?JSON.stringify(p.model_meta,null,2):'';
+  document.getElementById('modalMask').classList.add('show');
+}
+function closeModal(){ document.getElementById('modalMask').classList.remove('show'); }
+function parseLines(s){ return (s||'').split('\n').map(x=>x.trim()).filter(Boolean); }
+function parseJSON(s){ s=(s||'').trim(); if(!s) return undefined; return JSON.parse(s); }
+async function saveProvider(){
+  let headers, modelMap, meta;
+  try{
+    headers = parseJSON(document.getElementById('fHeaders').value);
+    modelMap = parseJSON(document.getElementById('fModelMap').value);
+    meta = parseJSON(document.getElementById('fMeta').value);
+  }catch(e){ toast('JSON 格式错误：'+e.message); return; }
+
+  // 保留旧对象里的未知字段（尤其是 model_meta），只覆盖表单里可编辑的项
+  const p = Object.assign({}, editingIndex>=0 ? CFG.providers[editingIndex] : {});
+  p.name = document.getElementById('fName').value.trim();
+  p.base_url = document.getElementById('fUrl').value.trim();
+  const anthropicUrl = document.getElementById('fAnthropicUrl').value.trim();
+  if(anthropicUrl) p.anthropic_base_url = anthropicUrl; else delete p.anthropic_base_url;
+  p.api_key = document.getElementById('fKey').value.trim();
+  const anthropicKey = document.getElementById('fAnthropicKey').value.trim();
+  if(anthropicKey) p.anthropic_api_key = anthropicKey; else delete p.anthropic_api_key;
+  p.models = parseLines(document.getElementById('fModels').value);
+  p.proxy_models = parseLines(document.getElementById('fProxyModels').value);
+  p.needs_session = document.getElementById('fNeedsSession').checked;
+  p.use_proxy = document.getElementById('fUseProxy').checked;
+  if(headers) p.headers = headers; else delete p.headers;
+  if(modelMap) p.model_map = modelMap; else delete p.model_map;
+  if(meta) p.model_meta = meta; else delete p.model_meta;
+
+  if(!p.name || !p.base_url){ toast('名称和 Base URL 必填'); return; }
+  if(!p.models.length){ toast('至少填一个模型'); return; }
+  if(editingIndex>=0) CFG.providers[editingIndex]=p; else CFG.providers.push(p);
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r.ok){ toast('保存失败：'+(r.error||'未知错误')); await load(); return; }
+  closeModal(); await load();
+  toast('已保存');
+}
+async function delProvider(i){
+  if(CFG.providers.length<=1){ toast('至少保留一个 Provider'); return; }
+  if(!confirm('确定删除该 Provider？')) return;
+  CFG.providers.splice(i,1);
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r.ok){ toast('删除失败：'+(r.error||'未知错误')); await load(); return; }
+  await load(); toast('已删除');
+}
+async function testProvider(i){
+  const p=CFG.providers[i];
+  const model=(p.models||[])[0];
+  toast('测试 '+model+' …');
+  const r=await api('/admin/api/test?model='+encodeURIComponent(model));
+  alert(r.ok?('✅ '+model+' 通了\n\n'+(r.reply||'').slice(0,500)):('❌ '+model+' 失败\n\n'+(r.error||'').slice(0,500)));
+}
+async function testModel(el){
+  const model = el.dataset.model;
+  if(el.classList.contains('testing')) return;
+  const orig = el.innerHTML;
+  el.classList.remove('ok','fail'); el.classList.add('testing');
+  el.textContent = model + ' ⏳';
+  try{
+    const r = await api('/admin/api/test?model='+encodeURIComponent(model));
+    if(r.ok){
+      el.classList.add('ok');
+      el.title = '✅ '+model+' ['+r.route+'] '+(r.reply||'').slice(0,200);
+    }else{
+      el.classList.add('fail');
+      el.title = '❌ '+model+' '+((r.error||'')+(r.status?(' HTTP '+r.status):'')).slice(0,300);
+    }
+  }catch(e){
+    el.classList.add('fail'); el.title = '❌ '+model+' '+e;
+  }
+  el.classList.remove('testing');
+  el.innerHTML = orig;
+}
+async function testAll(){
+  const tags = Array.from(document.querySelectorAll('.provider .tag[data-model]'));
+  if(!tags.length){ toast('没有可测试的模型'); return; }
+  toast('开始测试 '+tags.length+' 个模型…');
+  const CONCURRENCY = 5;
+  for(let i=0;i<tags.length;i+=CONCURRENCY){
+    await Promise.all(tags.slice(i,i+CONCURRENCY).map(t=>testModel(t)));
+  }
+  const ok = document.querySelectorAll('.tag.ok').length;
+  const fail = document.querySelectorAll('.tag.fail').length;
+  toast('测试完成：✅ '+ok+' 通，❌ '+fail+' 失败');
+}
+document.getElementById('modalMask').addEventListener('click',e=>{ if(e.target.id==='modalMask') closeModal(); });
+load();
+setInterval(loadQuota, 60000);
+setInterval(loadUsage, 5000);
+</script>
+<script>
+(function(){
+  'use strict';
+  /* ---- 1) tab：只改 display/hidden/aria，绝不摘 DOM 节点 ---- */
+  var ORDER = ['run','usage','upstream','rules'];
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.tabs [role="tab"]'));
+  var panels = Array.prototype.slice.call(document.querySelectorAll('.view'));
+  var list = document.querySelector('.tabs');
+  function fromHash(){
+    var h = String(location.hash || '').replace(/^#/, '');
+    return ORDER.indexOf(h) >= 0 ? h : 'run';
+  }
+  function activate(name, moveFocus){
+    if (ORDER.indexOf(name) < 0) name = 'run';
+    var idx = ORDER.indexOf(name);
+    tabs.forEach(function(t){
+      var on = t.getAttribute('data-view') === name;
+      t.classList.toggle('is-active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+    });
+    panels.forEach(function(p){
+      var on = p.getAttribute('data-view') === name;
+      p.classList.toggle('is-active', on);
+      if (on) p.removeAttribute('hidden'); else p.setAttribute('hidden', '');
+    });
+    if (location.hash !== '#' + name){
+      try { history.replaceState(null, '', '#' + name); } catch (e) {}
+    }
+    if (moveFocus) tabs[idx].focus();
+  }
+  tabs.forEach(function(t){
+    t.addEventListener('click', function(){ activate(t.getAttribute('data-view'), false); });
+  });
+  if (list) list.addEventListener('keydown', function(e){
+    var i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    var n = -1;
+    switch (e.key){
+      case 'ArrowRight': case 'Right': n = (i + 1) % tabs.length; break;
+      case 'ArrowLeft':  case 'Left':  n = (i - 1 + tabs.length) % tabs.length; break;
+      case 'Home': n = 0; break;
+      case 'End':  n = tabs.length - 1; break;
+      default: return;
+    }
+    e.preventDefault();
+    activate(ORDER[n], true);
+  });
+  window.addEventListener('hashchange', function(){ activate(fromHash(), false); });
+  activate(fromHash(), false);
+
+  /* ---- 2) emoji 文本映射：只替换文本节点与 title 属性 ---- */
+  /* 冻结 <script> 动态注入的字符；用 \u 转义写，避免任何字面 emoji 进入交付物。
+     alert('...') 是浏览器原生对话框、不在 DOM，登记为已知残留，不覆盖 window.alert。 */
+  var RE = /(\uD83C\uDF81|\uD83C\uDF10|\u2705|\u274C|\u23F3|\u26A0)\uFE0F?/g;
+  var MAP = {
+    '\uD83C\uDF81': '\u00B7\u514D',        /* 礼物 -> ·免 */
+    '\uD83C\uDF10': '\u00B7\u4EE3\u7406',  /* 地球 -> ·代理 */
+    '\u2705': '\u662F',                    /* 勾   -> 是 */
+    '\u274C': '\u5426',                    /* 叉   -> 否 */
+    '\u23F3': '\u2026',                    /* 沙漏 -> … */
+    '\u26A0': '!'                          /* 警告 -> ! */
+  };
+  function scrub(s){ return s.replace(RE, function(m, c){ return MAP[c] || m; }); }
+  var busy = false;
+  function scrubNode(n){
+    if (n.nodeType === 3){
+      var s = n.nodeValue, o = scrub(s);
+      if (o !== s) n.nodeValue = o;       /* 只在真变了才写，guard 防自触 */
+      return;
+    }
+    if (n.nodeType !== 1) return;
+    if (n.nodeName === 'SCRIPT' || n.nodeName === 'STYLE') return;
+    if (n.hasAttribute && n.hasAttribute('title')){
+      var v = n.getAttribute('title'), t = scrub(v);
+      if (t !== v) n.setAttribute('title', t);
+    }
+    var kids = n.childNodes;
+    for (var i = 0; i < kids.length; i++) scrubNode(kids[i]);
+  }
+  scrubNode(document.body);
+  var obs = new MutationObserver(function(records){
+    if (busy) return;
+    busy = true;
+    try {
+      records.forEach(function(r){
+        if (r.type === 'childList'){
+          for (var i = 0; i < r.addedNodes.length; i++) scrubNode(r.addedNodes[i]);
+        } else if (r.type === 'attributes'){
+          scrubNode(r.target);
+        }
+      });
+    } finally { busy = false; }
+  });
+  obs.observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['title']});
+})();
+</script>
+</body>
+</html>

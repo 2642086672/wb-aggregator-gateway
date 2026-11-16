@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>聚合网关管理端</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--border:#e3e6ea;--text:#1f2329;--muted:#6b7280;--primary:#2563eb;--primary-h:#1d4ed8;--danger:#dc2626;--ok:#16a34a;--warn:#d97706;--tag:#eef2ff;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+header{background:var(--card);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+header h1{font-size:17px;font-weight:600;display:flex;align-items:center;gap:8px}
+.ver{font-size:11px;font-weight:500;color:var(--muted);background:var(--bg);border:1px solid var(--border);padding:1px 7px;border-radius:999px}
+.header-right{display:flex;align-items:center;gap:10px}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:500;background:#dcfce7;color:#166534}
+.badge::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.badge.off{background:#fee2e2;color:#991b1b}.badge.off::before{background:var(--danger)}
+button{cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--text);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:500;transition:.15s}
+button:hover{border-color:#c7ccd3;background:#f9fafb}
+button.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+button.primary:hover{background:var(--primary-h)}
+button.danger{color:var(--danger);border-color:#fecaca}
+button.danger:hover{background:#fef2f2}
+button.sm{padding:4px 10px;font-size:12px;border-radius:6px}
+main{max-width:1200px;margin:0 auto;padding:20px 24px;display:grid;gap:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
+.card h2{font-size:14px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat{background:var(--bg);border-radius:10px;padding:14px 16px}
+.stat .label{font-size:12px;color:var(--muted);margin-bottom:6px}
+.stat .value{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat .value small{font-size:12px;font-weight:400;color:var(--muted)}
+.provider{border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+.provider-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.provider-name{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px}
+.provider-name .dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.provider-meta{font-size:12px;color:var(--muted);margin-top:6px;word-break:break-all;font-family:var(--mono)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tag{background:var(--tag);color:#3730a3;padding:3px 9px;border-radius:6px;font-size:12px;font-family:var(--mono);cursor:pointer;transition:.15s;border:1px solid transparent}
+.tag:hover{border-color:#a5b4fc}
+.tag.proxy{background:#fef3c7;color:#92400e}
+.tag.testing{background:#e5e7eb;color:#6b7280;cursor:wait}
+.tag.ok{background:#dcfce7;color:#166534;border-color:#86efac}
+.tag.fail{background:#fee2e2;color:#991b1b;border-color:#fca5a5}
+.tag.pill{background:#e0f2fe;color:#075985;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.log{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:14px 16px;font-family:var(--mono);font-size:12px;line-height:1.7;height:320px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+.table-wrap{overflow:auto;max-height:440px;border:1px solid var(--border);border-radius:10px}
+.table-wrap table{width:100%;border-collapse:collapse;font-size:12px}
+.table-wrap th,.table-wrap td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+.table-wrap th{position:sticky;top:0;background:var(--bg);font-weight:600;color:var(--muted);z-index:1}
+.table-wrap tr:last-child td{border-bottom:none}
+.table-wrap td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.table-wrap td.center{text-align:center}
+.table-wrap td.mono{font-family:var(--mono)}
+.hint-inline{font-size:12px;font-weight:400;color:var(--muted)}
+.progress{height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden;min-width:70px}
+.progress>i{display:block;height:100%;background:var(--ok);transition:width .3s}
+.progress.warn>i{background:var(--warn)}
+.progress.danger>i{background:var(--danger)}
+.quota-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.quota-card{background:var(--bg);border-radius:10px;padding:14px 16px}
+.quota-card .label{font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+.quota-card .value{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;margin:6px 0}
+.quota-cell{min-width:170px}
+.quota-line{display:flex;align-items:center;gap:8px}
+.quota-text{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.log .t{color:#64748b}
+.empty{color:var(--muted);font-size:13px;padding:8px 0}
+.modal-mask{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal-mask.show{display:flex}
+.modal{background:var(--card);border-radius:14px;padding:22px;width:100%;max-width:640px;max-height:90vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.2)}
+.modal h3{font-size:15px;margin-bottom:16px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-bottom:6px}
+.field input,.field textarea{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:var(--text)}
+.field input:focus,.field textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.field .hint{font-size:11px;color:var(--muted);margin-top:5px}
+.checks{display:flex;flex-wrap:wrap;gap:14px}
+.checks label{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;color:var(--text);cursor:pointer}
+.modal-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;opacity:0;transition:.25s;z-index:200;pointer-events:none}
+.toast.show{opacity:1}
+@media(max-width:720px){main{padding:14px}.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ 聚合网关管理端 <span class="ver">v1.4.4</span></h1>
+  <div class="header-right">
+    <span class="badge" id="statusBadge">运行中</span>
+    <button class="sm" onclick="reload()">重载配置</button>
+    <button class="sm" onclick="testAll()">⚡ 一键测试</button>
+    <button class="sm primary" onclick="openAdd()">+ 添加 Provider</button>
+  </div>
+</header>
+<main>
+  <div class="card">
+    <h2>总览</h2>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <h2>Go 服务端额度 <span class="hint-inline" id="quotaPlan"></span>
+      <span><button class="sm" onclick="loadQuota(true)">刷新</button></span>
+    </h2>
+    <div class="hint-inline" style="margin-bottom:12px">实时读取 <code>GET /zen/go/v1/usage</code>（使用 opencode-go 的 API key），显示服务端 rolling / weekly / monthly 百分比和重置时间。下方「本地按模型累计」仅统计本网关流量，仅供参考。</div>
+    <div class="quota-summary" id="quotaSummary"></div>
+    <div id="quotaError" class="empty" style="margin-top:10px"></div>
+    <details style="margin-top:16px">
+      <summary class="hint-inline" style="cursor:pointer">本地按模型累计（参考）</summary>
+      <div id="quotaTable" style="margin-top:10px"></div>
+    </details>
+  </div>
+  <div class="card">
+    <h2>Zen 余额（服务端） <span class="hint-inline" id="zenSource"></span></h2>
+    <div class="hint-inline" style="margin-bottom:12px">读取 OpenCode Console 的真实预付费余额和月度预算（<code>/console/api/billing/status</code>、<code>/console/api/budgets/org</code>）。Go 额度接口只返回订阅窗口，不返回 Zen 余额，所以此项需要配置 Console 会话 Cookie。</div>
+    <div class="quota-summary" id="zenSummary"></div>
+    <details style="margin-top:14px">
+      <summary class="hint-inline" style="cursor:pointer">配置 Console 会话 Cookie</summary>
+      <div class="field" style="margin-top:10px">
+        <label>会话 Cookie</label>
+        <textarea id="zenCookie" rows="3" placeholder="__Host-console_session=...; auth=..."></textarea>
+        <div class="hint">浏览器登录 opencode.ai 后，从 DevTools → Application → Cookies → https://opencode.ai 复制；只保存在本机 gateway_config.json，不会发送给客户端。</div>
+      </div>
+      <div class="field">
+        <label>org_id（可选，留空自动发现）</label>
+        <input id="zenOrg" placeholder="org_...">
+      </div>
+      <div class="row">
+        <button class="sm primary" onclick="saveZen()">保存并刷新</button>
+        <button class="sm" onclick="clearZen()">清除 Cookie</button>
+      </div>
+    </details>
+  </div>
+  <div class="card">
+    <h2>智能路由 <span class="hint-inline">智能别名 / 故障转移 / 失败冷却</span>
+      <span><button class="sm" onclick="loadRouting()">刷新</button></span>
+    </h2>
+    <div class="hint-inline" style="margin-bottom:10px">
+      <b>智能别名</b>：客户端请求 <code>smart</code> / <code>cheap</code> / <code>vision</code> / <code>coding</code> 时，按候选顺序自动选路，跳过冷却中的模型。<br>
+      <b>故障转移</b>：主模型返回 <code>retry_on</code> 中的错误码时，自动尝试候选列表里的下一个模型；全部失败后返回最后一次上游错误。<br>
+      <b>冷却</b>：模型失败后 <code>cooldown_seconds</code> 秒内不再优先选它，成功后自动恢复。
+    </div>
+    <div class="field">
+      <label>路由配置（JSON）</label>
+      <textarea id="routingJson" rows="12"></textarea>
+    </div>
+    <div class="row">
+      <button class="sm primary" onclick="saveRouting()">保存路由</button>
+      <button class="sm" onclick="resetRouting()">恢复默认</button>
+    </div>
+    <div id="routingHealth" style="margin-top:12px"></div>
+  </div>
+  <div class="card">
+    <h2>客户端接入密钥 <span class="hint-inline">客户端连网关用这个 key；上游 provider key 由网关管理</span></h2>
+    <div class="field checks">
+      <label><input type="checkbox" id="authEnabled"> 启用鉴权（关闭后任何人可访问）</label>
+    </div>
+    <div class="field">
+      <label>允许的 key（每行一个）</label>
+      <textarea id="authKeys" rows="3" placeholder="sk-gw-..."></textarea>
+      <div class="hint">OpenAI 客户端：Authorization: Bearer &lt;key&gt; · Anthropic 客户端：x-api-key: &lt;key&gt;</div>
+    </div>
+    <div class="row">
+      <button class="sm primary" onclick="saveAuth()">保存密钥</button>
+      <button class="sm" onclick="genKey()">生成随机 key</button>
+      <button class="sm" onclick="copyKey()">复制第一个</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Providers</h2>
+    <div id="providers"></div>
+  </div>
+  <div class="card">
+    <h2>模型能力 <span class="hint-inline">来自 model_meta，可在编辑 Provider 中修改</span></h2>
+    <div id="modelTable"></div>
+  </div>
+  <div class="card">
+    <h2>Token 用量 <span class="hint-inline" id="usageSince"></span>
+      <span>
+        <button class="sm" onclick="loadUsage()">刷新</button>
+        <button class="sm danger" onclick="resetUsage()">重置</button>
+      </span>
+    </h2>
+    <div class="stats" id="usageTotals"></div>
+    <div id="liveTps" class="hint-inline" style="margin-top:10px"></div>
+    <div style="margin-top:18px">
+      <h2 style="font-size:13px">按厂商</h2>
+      <div id="usageVendors"></div>
+      <div class="hint-inline" style="margin-top:6px">厂商按模型名推断（claude→Anthropic、glm→智谱、gemini→Google…）；只统计经过网关的流量，OpenCode 其它客户端的用量无法计入 token。</div>
+    </div>
+    <div style="margin-top:18px">
+      <h2 style="font-size:13px">按 Provider</h2>
+      <div id="usageProviders"></div>
+    </div>
+    <div style="margin-top:18px">
+      <h2 style="font-size:13px">按模型</h2>
+      <div id="usageModels"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>实时日志 <button class="sm" onclick="loadLogs()">刷新</button></h2>
+    <div class="log" id="log"></div>
+  </div>
+</main>
+
+<div class="modal-mask" id="modalMask">
+  <div class="modal">
+    <h3 id="modalTitle">添加 Provider</h3>
+    <div class="field"><label>名称</label><input id="fName" placeholder="opencode-go"></div>
+    <div class="field"><label>Base URL（OpenAI）</label><input id="fUrl" placeholder="https://api.example.com/v1"><div class="hint">OpenAI 兼容端点，不带 /chat/completions</div></div>
+    <div class="field"><label>Anthropic Base URL（可选）</label><input id="fAnthropicUrl" placeholder="https://api.example.com/anthropic/v1"><div class="hint">不带 /messages；留空则不支持该 provider 的 /v1/messages（opencode.ai 可自动推导）</div></div>
+    <div class="field"><label>API Key（OpenAI）</label><input id="fKey" placeholder="sk-..."></div>
+    <div class="field"><label>Anthropic API Key（可选）</label><input id="fAnthropicKey" placeholder="留空则复用上面的 API Key"><div class="hint">/v1/messages 优先使用这个 key；留空则回落到 OpenAI API Key</div></div>
+    <div class="field"><label>模型列表（每行一个）</label><textarea id="fModels" rows="5" placeholder="gpt-6-luna&#10;glm-5.3-flash"></textarea></div>
+    <div class="field"><label>走代理的模型（每行一个，留空则全部直连）</label><textarea id="fProxyModels" rows="3" placeholder="gpt-6-luna"></textarea></div>
+    <div class="field"><label>自定义请求头（JSON，可选）</label><textarea id="fHeaders" rows="2" placeholder='{"x-opencode-session":"{session}"}'></textarea><div class="hint">{session} 会自动替换为会话 ID</div></div>
+    <div class="field checks">
+      <label><input type="checkbox" id="fNeedsSession"> 需要 session 头（opencode）</label>
+      <label><input type="checkbox" id="fUseProxy"> 全部模型走代理</label>
+    </div>
+    <div class="field"><label>模型 ID 映射（JSON，可选）</label><textarea id="fModelMap" rows="2" placeholder='{"gpt-6-luna-responses":"gpt-6-luna"}'></textarea></div>
+    <div class="field"><label>模型元数据（JSON，可选）</label><textarea id="fMeta" rows="4" placeholder='{"gpt-6-luna":{"context":1050000,"input":922000,"output":128000,"images":true,"tools":true,"reasoning":["low","high"]}}'></textarea><div class="hint">用于管理端展示上下文 / 多模态 / 工具 / 思考强度；编辑 Provider 时会保留已有元数据</div></div>
+    <div class="modal-foot">
+      <button onclick="closeModal()">取消</button>
+      <button class="primary" onclick="saveProvider()">保存</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+window.onerror = function(msg, url, line, col, err){
+  var box = document.getElementById('errbox') || document.body;
+  box.innerHTML = '<pre style="padding:24px;color:#dc2626;font:13px/1.6 monospace;white-space:pre-wrap;word-break:break-all">⚠ 脚本错误\n' +
+    'message: ' + msg + '\nline: ' + line + ':' + (col||0) +
+    (err && err.stack ? '\n\nstack:\n' + err.stack : '') + '</pre>';
+  return false;
+};
+window.addEventListener('unhandledrejection', function(e){
+  var box = document.getElementById('errbox') || document.body;
+  box.innerHTML = '<pre style="padding:24px;color:#d97706;font:13px/1.6 monospace;white-space:pre-wrap">⚠ 未捕获的 Promise 错误\n' + (e.reason && (e.reason.stack || e.reason.message || String(e.reason))) + '</pre>';
+});
+</script>
+<script>
+let CFG = null;
+let CFG_REVISION = '';
+let STATUS = null;
+let editingIndex = -1;
+const DEFAULT_ROUTING = {"enabled": true, "fallbacks": {"gpt-6-luna": ["gpt-6-luna", "gpt-5.6-luna", "glm-5.3-flash", "LongCat-2.5-Preview"], "gpt-5.6-luna": ["gpt-5.6-luna", "glm-5.3-flash", "LongCat-2.5-Preview"], "deepseek-v4.1-flash": ["deepseek-v4.1-flash", "glm-5.3-flash", "LongCat-2.5-Preview"], "claude-haiku-5-5": ["claude-haiku-5-5", "glm-5.3-flash"], "glm-5.3-flash": ["glm-5.3-flash", "deepseek-v4.1-flash", "LongCat-2.5-Preview"]}, "smart_aliases": {"smart": ["gpt-6-luna", "glm-5.3-flash", "deepseek-v4.1-flash", "LongCat-2.5-Preview"], "cheap": ["glm-5.3-flash", "deepseek-v4.1-flash", "LongCat-2.5-Preview"], "vision": ["gpt-6-luna", "gemini-4-argon", "claude-haiku-5-5"], "coding": ["gpt-6-luna", "deepseek-v4.1-flash", "kimi-k3.1-pro"]}, "retry_on": [400, 402, 403, 404, 408, 429, 500, 502, 503, 504, 529], "max_attempts": 4, "cooldown_seconds": 300};
+
+async function api(path, opts){
+  const r = await fetch(path, Object.assign({cache:'no-store'}, opts||{}));
+  if(path === '/admin/api/config' && (!opts || !opts.method || opts.method === 'GET')){
+    const rev = r.headers.get('X-Config-Revision');
+    if(rev) CFG_REVISION = rev;
+  }
+  const t = await r.text();
+  try{ return JSON.parse(t); }catch(e){ return {raw:t}; }
+}
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 2200);
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function fillZenForm(){
+  const z = (CFG && CFG.zen_console) || {};
+  const cookie = document.getElementById('zenCookie');
+  const org = document.getElementById('zenOrg');
+  if(cookie) cookie.value = z.session_cookie || '';
+  if(org) org.value = z.org_id || '';
+}
+function fillRoutingForm(){
+  const ta = document.getElementById('routingJson');
+  if(ta) ta.value = JSON.stringify((CFG && CFG.routing) || {}, null, 2);
+}
+async function loadRouting(){
+  try{
+    const d = await api('/admin/api/routing');
+    const box = document.getElementById('routingHealth');
+    if(!box) return;
+    const h = d.health || [];
+    box.innerHTML = h.length
+      ? '<div class="hint-inline">冷却中：'+h.map(x=>esc(x.key)+'（'+esc(x.status)+'，'+Math.max(0,Math.round(Date.now()/1000 - Number(x.ts)))+'s 前）').join('、')+'</div>'
+      : '<div class="hint-inline">当前没有模型处于冷却期。</div>';
+  }catch(e){}
+}
+async function saveRouting(){
+  let val;
+  try{ val = JSON.parse(document.getElementById('routingJson').value); }
+  catch(e){ toast('JSON 格式错误：'+(e.message||e)); return; }
+  CFG.routing = val;
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r || r.ok === false){ toast('保存失败：'+((r&&r.error)||'未知错误')); return; }
+  await api('/admin/api/reload',{method:'POST'});
+  await load();
+  await loadRouting();
+  toast('路由配置已保存');
+}
+async function resetRouting(){
+  if(!confirm('恢复默认路由配置？')) return;
+  CFG.routing = JSON.parse(JSON.stringify(DEFAULT_ROUTING));
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r || r.ok === false){ toast('保存失败：'+((r&&r.error)||'未知错误')); return; }
+  await api('/admin/api/reload',{method:'POST'});
+  await load();
+  await loadRouting();
+  toast('已恢复默认路由');
+}
+async function saveZen(){
+  const cookie = document.getElementById('zenCookie').value.trim();
+  const org = document.getElementById('zenOrg').value.trim();
+  CFG.zen_console = {enabled: !!cookie, session_cookie: cookie, org_id: org};
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r || r.ok === false){ toast('保存失败：'+((r&&r.error)||'未知错误')); return; }
+  await api('/admin/api/reload',{method:'POST'});
+  await load();
+  await loadQuota(true);
+  toast('Zen 配置已保存');
+}
+async function clearZen(){
+  CFG.zen_console = {enabled:false, session_cookie:'', org_id:''};
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r || r.ok === false){ toast('清除失败：'+((r&&r.error)||'未知错误')); return; }
+  await api('/admin/api/reload',{method:'POST'});
+  await load();
+  await loadQuota(true);
+  toast('已清除 Zen Cookie');
+}
+async function load(){
+  const cfg = await api('/admin/api/config');
+  CFG = cfg;
+  try{ STATUS = await api('/admin/api/status'); }catch(e){ STATUS = null; }
+  fillZenForm();
+  fillRoutingForm();
+  loadRouting();
+  render();
+  loadLogs();
+  loadUsage();
+  loadQuota();
+}
+function fmtCount(v){ return Number(v||0).toLocaleString('en-US'); }
+function fmtRate(v){ return v == null ? '—' : Number(v).toFixed(1)+'%'; }
+function fmtTps(v){ return v == null ? '—' : Number(v).toFixed(1)+' /s'; }
+function fmtTokens(v){
+  if(v == null || v === '') return '—';
+  const n = Number(v);
+  if(!isFinite(n)) return '—';
+  if(Math.abs(n) < 1000000) return Math.round(n).toLocaleString('en-US');
+  const units = [
+    [1e12, '万亿'], [1e11, '千亿'], [1e10, '百亿'],
+    [1e9, '十亿'], [1e8, '亿'], [1e7, '千万'], [1e6, '百万']
+  ];
+  for(const unit of units){
+    if(Math.abs(n) >= unit[0]){
+      const text = (n/unit[0]).toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1');
+      return text+' '+unit[1];
+    }
+  }
+  return Math.round(n).toLocaleString('en-US');
+}
+function money(v){
+  if(v == null) return '—';
+  const n = Number(v);
+  if(n === 0) return '$0.00';
+  if(n < 0.0001) return '$'+n.toFixed(6);
+  if(n < 0.01) return '$'+n.toFixed(4);
+  if(n < 1) return '$'+n.toFixed(3);
+  return '$'+n.toFixed(2);
+}
+function renderPrice(p){
+  if(!p) return '<span class="empty">未录</span>';
+  if(p.unit === 'per_minute') return '<span title="按分钟计费">'+money(p.per_minute)+'/min</span>';
+  return '<span title="每 1M tokens · USD">I '+money(p.input)+' / O '+money(p.output)+'<br>R '+money(p.cache_read)+' / W '+money(p.cache_write)+'</span>';
+}
+function renderModelTable(providers){
+  const rows = [];
+  (providers||[]).forEach(p=>{
+    const metas = p.model_meta || {};
+    const px = new Set(p.proxy_models||[]);
+    (p.models||[]).forEach(m=>{
+      const mt = metas[m] || {};
+      rows.push('<tr>'+
+        '<td class="mono">'+esc(m)+(mt.free?' 🎁':'')+'</td>'+
+        '<td>'+esc(p.name)+'</td>'+
+        '<td class="num">'+fmtTokens(mt.context||mt.input)+'</td>'+
+        '<td class="num">'+fmtTokens(mt.output)+'</td>'+
+        '<td class="center">'+(mt.images===true?'✅':mt.images===false?'❌':'—')+'</td>'+
+        '<td class="center">'+(mt.tools===true?'✅':mt.tools===false?'❌':'—')+'</td>'+
+        '<td>'+esc((mt.reasoning||[]).join(' / ')||'—')+'</td>'+ 
+        '<td>'+renderPrice(mt.pricing)+'</td>'+ 
+        '<td>'+((px.has(m)||p.use_proxy)?'🌐 代理':'直连')+'</td>'+
+      '</tr>');
+    });
+  });
+  const box = document.getElementById('modelTable');
+  if(!rows.length){ box.innerHTML = '<div class="empty">暂无模型元数据</div>'; return; }
+  box.innerHTML = '<div class="table-wrap"><table><thead><tr>'+
+    '<th>模型</th><th>Provider</th><th>上下文</th><th>输出上限</th>'+
+    '<th>多模态</th><th>工具</th><th>思考强度</th><th>价格/1M Token<br><small>I/O · Cache R/W</small></th><th>出口</th>'+ 
+    '</tr></thead><tbody>'+rows.join('')+'</tbody></table></div>';
+}
+function renderAuth(){
+  const a = CFG.client_auth || {};
+  document.getElementById('authEnabled').checked = !!a.enabled;
+  document.getElementById('authKeys').value = (a.keys||[]).join('\n');
+}
+async function saveAuth(){
+  const enabled = document.getElementById('authEnabled').checked;
+  const keys = parseLines(document.getElementById('authKeys').value);
+  if(enabled && !keys.length){ toast('启用鉴权时至少填一个 key'); return; }
+  CFG.client_auth = {enabled: enabled, keys: keys};
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r.ok){ toast('保存失败：'+(r.error||'未知错误')); await load(); return; }
+  await load(); toast('接入密钥已保存');
+}
+function genKey(){
+  let hex;
+  try{
+    const arr = new Uint8Array(16); crypto.getRandomValues(arr);
+    hex = Array.prototype.map.call(arr, b=>b.toString(16).padStart(2,'0')).join('');
+  }catch(e){
+    hex = Math.random().toString(16).slice(2).padEnd(32,'0').slice(0,32);
+  }
+  document.getElementById('authKeys').value = 'sk-gw-'+hex;
+  document.getElementById('authEnabled').checked = true;
+  toast('已生成，记得点保存');
+}
+async function copyKey(){
+  const key = parseLines(document.getElementById('authKeys').value)[0];
+  if(!key){ toast('没有可复制的 key'); return; }
+  try{ await navigator.clipboard.writeText(key); toast('已复制'); }
+  catch(e){ toast('复制失败，请手动选择'); }
+}
+function render(){
+  renderAuth();
+  const providers = CFG.providers||[];
+  const totalModels = providers.reduce((a,p)=>a+(p.models||[]).length,0);
+  const proxyModels = providers.reduce((a,p)=>a+(p.proxy_models||[]).length,0);
+  const lan = (STATUS && STATUS.lan_urls) || [];
+  const listenHost = (CFG.listen||{}).host || '127.0.0.1';
+  const listenPort = (CFG.listen||{}).port || 8787;
+  const localBase = 'http://' + (listenHost==='0.0.0.0'?'127.0.0.1':listenHost) + ':' + listenPort;
+  const bases = lan.length ? lan : [localBase];
+  const endpointLines = (suffix) => bases.map(b=>esc(b+suffix)).join('<br>');
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="label">Providers</div><div class="value">${providers.length}</div></div>
+    <div class="stat"><div class="label">模型总数</div><div class="value">${totalModels}</div></div>
+    <div class="stat"><div class="label">走代理模型</div><div class="value">${proxyModels} <small>/ ${totalModels}</small></div></div>
+    <div class="stat"><div class="label">代理地址</div><div class="value" style="font-size:14px;font-family:var(--mono)">${esc(CFG.proxy||'（直连）')}</div></div>
+    <div class="stat"><div class="label">监听</div><div class="value" style="font-size:14px;font-family:var(--mono)">${esc(listenHost)}:${esc(listenPort)}${lan.length?' <small>局域网</small>':' <small>仅本机</small>'}</div></div>
+    <div class="stat"><div class="label">OpenAI 端点</div><div class="value" style="font-size:12px;font-family:var(--mono);word-break:break-all">${endpointLines('/v1')}</div></div>
+    <div class="stat"><div class="label">Anthropic 端点</div><div class="value" style="font-size:12px;font-family:var(--mono);word-break:break-all">${endpointLines('')}</div></div>
+  `;
+  renderModelTable(providers);
+  const box = document.getElementById('providers');
+  if(!providers.length){ box.innerHTML = '<div class="empty">还没有 Provider，点右上角添加。</div>'; return; }
+  box.innerHTML = providers.map((p,i)=>{
+    const models = p.models||[];
+    const px = new Set(p.proxy_models||[]);
+    const metas = p.model_meta || {};
+    const tags = models.map(m=>{
+      const mt = metas[m];
+      const tip = ['点击测试该模型'];
+      if(mt){
+        const ctxIn = mt.input || mt.context || '?';
+        tip.push(`上下文 ${ctxIn} / ${mt.output || '?'}`);
+        tip.push(`多模态 ${mt.images===true?'✅':mt.images===false?'❌':'—'}   工具 ${mt.tools===true?'✅':mt.tools===false?'❌':'—'}`);
+        if(mt.reasoning && mt.reasoning.length) tip.push(`思考 ${mt.reasoning.join(' / ')}`);
+        if(mt.pricing){
+          if(mt.pricing.unit==='per_minute') tip.push(`价格 $${mt.pricing.per_minute}/分钟`);
+          else tip.push(`价格 输入 $${mt.pricing.input}/1M · 输出 $${mt.pricing.output}/1M`);
+        }
+        if(mt.free) tip.push('免费模型');
+      }
+      return `<span class="tag${px.has(m)?' proxy':''}" data-model="${esc(m)}" onclick="testModel(this)" title="${esc(tip.join('\n'))}">${esc(m)}${mt&&mt.free?' 🎁':''}${px.has(m)?' 🌐':''}</span>`;
+    }).join('');
+    return `<div class="provider">
+      <div class="provider-head">
+        <div class="provider-name"><span class="dot"></span>${esc(p.name)}</div>
+        <div class="row">
+          <button class="sm" onclick="testProvider(${i})">测试</button>
+          <button class="sm" onclick="openEdit(${i})">编辑</button>
+          <button class="sm danger" onclick="delProvider(${i})">删除</button>
+        </div>
+      </div>
+      <div class="provider-meta">openai: ${esc(p.base_url)}</div>
+      ${p.anthropic_base_url?`<div class="provider-meta">anthropic: ${esc(p.anthropic_base_url)} · key: ${p.anthropic_api_key?esc((p.anthropic_api_key||'').slice(0,10))+'…':'复用 OpenAI key'}</div>`:''}
+      <div class="provider-meta">key: ${esc((p.api_key||'').slice(0,10))}…${p.needs_session?' · needs_session':''}${p.use_proxy?' · 全代理':''}</div>
+      <div class="tags">${tags||'<span class="empty">无模型</span>'}</div>
+    </div>`;
+  }).join('');
+}
+async function loadLogs(){
+  const d = await api('/admin/api/logs?lines=150');
+  const el = document.getElementById('log');
+  el.textContent = (d.lines||[]).join('');
+  el.scrollTop = el.scrollHeight;
+}
+function renderUsageTable(items, type){
+  if(!items || !items.length) return '<div class="empty">暂无用量记录</div>';
+  const isModel = type === 'model';
+  const isVendor = type === 'vendor';
+  const columns = isModel
+    ? '<th>模型</th><th>厂商</th><th>Provider</th>'
+    : isVendor
+      ? '<th>厂商</th>'
+      : '<th>Provider</th>';
+  const rows = items.map(x=>{
+    const identity = isModel
+      ? '<td class="mono">'+esc(x.model||'')+'</td><td>'+esc(x.vendor||'')+'</td><td>'+esc(x.provider||'')+'</td>'
+      : isVendor
+        ? '<td>'+esc(x.vendor||'')+'</td>'
+        : '<td>'+esc(x.name||'')+'</td>';
+    return '<tr>'+identity+
+      '<td class="num">'+fmtCount(x.requests)+'</td>'+ 
+      '<td class="num">'+fmtTokens(x.input_tokens)+'</td>'+ 
+      '<td class="num">'+fmtTokens(x.output_tokens)+'</td>'+ 
+      '<td class="num">'+fmtTokens(x.total_tokens)+'</td>'+ 
+      '<td class="num">'+fmtTokens(x.cached_tokens)+'</td>'+ 
+      '<td class="num">'+fmtRate(x.cache_hit_rate)+'</td>'+ 
+      '<td class="num">'+fmtTokens(x.reasoning_tokens)+'</td>'+ 
+      '<td class="num">'+fmtTps(x.avg_tps)+'</td>'+
+      '<td class="num">$'+(Number(x.cost||0).toFixed(6))+'</td>'+ 
+      '<td class="num">$'+(Number(x.list_cost||0).toFixed(6))+'</td>'+ 
+      '<td class="num">'+fmtCount(x.errors)+'</td>'+  
+      '<td class="num">'+fmtCount(x.usage_missing)+'</td>'+ 
+      '<td class="num">'+(x.requests?Math.round(Number(x.latency_ms||0)/Number(x.requests||1))+' ms':'—')+'</td>'+ 
+      '<td>'+esc(x.last_used||'—')+'</td></tr>';
+  }).join('');
+  return '<div class="table-wrap"><table><thead><tr>'+columns+
+    '<th>请求</th><th>输入 Token</th><th>输出 Token</th><th>总 Token</th>'+ 
+    '<th>缓存读</th><th>缓存命中率</th><th>推理 Token</th><th>平均 TPS</th><th>实扣（$）</th><th>标价估算（$）</th><th>错误</th><th>无用量</th><th>平均延迟</th><th>最近调用</th>'+ 
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+async function loadUsage(){
+  try{
+    const d = await api('/admin/api/usage');
+    const t = d.totals || {};
+    const live = d.live || {};
+    const goStat = (d.providers||[]).find(p=>p.name==='opencode-go') || {};
+    document.getElementById('usageSince').textContent = d.since ? ('统计起始 '+d.since+' · 更新 '+(d.updated||'—')) : '';
+    document.getElementById('usageTotals').innerHTML = `
+      <div class="stat"><div class="label">请求数</div><div class="value">${fmtCount(t.requests)}</div></div>
+      <div class="stat"><div class="label">Go 本地 Token</div><div class="value">${fmtTokens(goStat.total_tokens)}</div></div>
+      <div class="stat"><div class="label">实时 TPS</div><div class="value">${fmtTps(live.output_tps)} <small>输出 / ${live.window_seconds||60}s</small></div></div>
+      <div class="stat"><div class="label">输入 Token</div><div class="value">${fmtTokens(t.input_tokens)}</div></div>
+      <div class="stat"><div class="label">输出 Token</div><div class="value">${fmtTokens(t.output_tokens)}</div></div>
+      <div class="stat"><div class="label">总 Token</div><div class="value">${fmtTokens(t.total_tokens)}</div></div>
+      <div class="stat"><div class="label">缓存读 Token</div><div class="value">${fmtTokens(t.cached_tokens)}</div></div>
+      <div class="stat"><div class="label">缓存命中率</div><div class="value">${fmtRate(t.cache_hit_rate)}</div></div>
+      <div class="stat"><div class="label">推理 Token</div><div class="value">${fmtTokens(t.reasoning_tokens)}</div></div>
+      <div class="stat"><div class="label">上游实扣</div><div class="value">$${Number(t.cost||0).toFixed(6)}</div></div>
+      <div class="stat"><div class="label">按模型价估算</div><div class="value">$${Number(t.list_cost||0).toFixed(6)}</div></div>
+      <div class="stat"><div class="label">用量缺失请求</div><div class="value">${fmtCount(t.usage_missing)}</div></div>`;
+    const liveRows = (live.by_model||[]).map(x=>esc(x.model)+' '+fmtTps(x.output_tps)).join(' · ');
+    document.getElementById('liveTps').innerHTML = Number(live.requests||0) > 0
+      ? '近 '+(live.span_seconds||live.window_seconds||60)+' 秒：输出 '+fmtTps(live.output_tps)
+        +' · 输入 '+fmtTps(live.input_tps)+' · 合计 '+fmtTps(live.total_tps)
+        +'（'+fmtCount(live.requests)+' 个请求）'
+        + (liveRows ? '<br>按模型：'+liveRows : '')
+      : '近 '+(live.window_seconds||60)+' 秒暂无 agent 请求。';
+    document.getElementById('usageVendors').innerHTML = renderUsageTable(d.vendors||[], 'vendor');
+    document.getElementById('usageProviders').innerHTML = renderUsageTable(d.providers||[], 'provider');
+    document.getElementById('usageModels').innerHTML = renderUsageTable(d.models||[], 'model');
+  }catch(e){
+    document.getElementById('usageTotals').innerHTML = '<div class="empty">读取用量失败：'+esc(e.message||e)+'</div>';
+  }
+}
+async function resetUsage(){
+  if(!confirm('确定重置所有 Token 用量统计？此操作不可撤销。')) return;
+  const r = await api('/admin/api/usage/reset',{method:'POST'});
+  if(!r.ok){ toast('重置失败'); return; }
+  await loadUsage(); toast('用量统计已重置');
+}
+function quotaBar(used, limit, percent){
+  const pct = Math.max(0, Math.min(100, Number(percent||0)));
+  let cls = 'progress';
+  if(percent >= 90) cls += ' danger'; else if(percent >= 70) cls += ' warn';
+  const text = (limit == null) ? '∞' : (money(used)+' / '+money(limit)+' · '+Number(percent||0).toFixed(1)+'%');
+  return '<div class="quota-line"><div class="'+cls+'" style="flex:1"><i style="width:'+pct+'%"></i></div><span class="quota-text">'+text+'</span></div>';
+}
+function fmtReset(s){
+  if(!s) return '—';
+  const d = new Date(s);
+  if(isNaN(d.getTime())) return s;
+  return d.toLocaleString('zh-CN',{hour12:false});
+}
+function fmtHours(h){
+  h = Number(h||0);
+  if(h >= 48) return (h/24).toFixed(1)+' 天';
+  if(h >= 1) return h.toFixed(1)+' 小时';
+  return Math.max(1, Math.round(h*60))+' 分钟';
+}
+function serverQuotaCard(label, data, eta){
+  data = data || {};
+  const pct = Math.max(0, Math.min(100, Number(data.percent||0)));
+  let cls = 'progress';
+  if(data.percent >= 90) cls += ' danger'; else if(data.percent >= 70) cls += ' warn';
+  const status = (data.status && data.status !== 'ok') ? data.status : '';
+  let etaText = '正在采样当前速度…';
+  if(eta){
+    if(eta.status === 'exhausted') etaText = '已用完';
+    else if(eta.status === 'flat') etaText = '用量未增长，暂无预计';
+    else if(eta.status === 'ok'){
+      const speed = eta.basis === 'recent' ? '按近期速度' : '按本窗口平均速度';
+      if(eta.before_reset === false){
+        etaText = '按当前速度，重置前不会用完（'+speed+'）';
+      }else{
+        etaText = '预计 '+fmtHours(eta.hours)+' 后用完 · '+esc(eta.at||'')+'（'+speed+'）';
+      }
+    }
+  }
+  const rateText = (eta && eta.rate_per_hour > 0)
+    ? ' · +'+Number(eta.rate_per_hour).toFixed(2)+'%/h' : '';
+  return '<div class="quota-card"><div class="label"><span>'+esc(label)+'</span><span>'+esc(status)+'</span></div>'+
+    '<div class="value">'+Number(data.percent||0)+'%</div>'+
+    '<div class="'+cls+'"><i style="width:'+pct+'%"></i></div>'+
+    '<div class="hint-inline" style="margin-top:6px">重置：'+esc(fmtReset(data.resetsAt))+'</div>'+
+    '<div class="hint-inline" style="margin-top:3px">'+esc(etaText)+rateText+'</div></div>';
+}
+function fmtUsd(v){ return v == null ? '—' : '$'+Number(v).toFixed(2); }
+function zenCard(z){
+  if(!z || !z.configured){
+    return '<div class="empty" style="grid-column:1/-1">未启用 Zen 余额监控。在 <code>gateway_config.json</code> 添加 <code>zen_console.enabled=true</code> 并填入 Console 会话 Cookie 后即可显示真实余额。</div>';
+  }
+  if(!z.ok){
+    return '<div class="empty" style="grid-column:1/-1">Zen 余额读取失败：'+esc(z.error||'未知错误')+
+      '<br>如果提示 401/403，通常是 Console 会话过期：重新登录 opencode.ai，复制新的 Cookie 更新 <code>zen_console.session_cookie</code>。</div>';
+  }
+  const spent = z.monthly_spent_usd, limit = z.monthly_limit_usd;
+  const pct = (spent != null && limit) ? Math.max(0, Math.min(100, spent/limit*100)) : null;
+  let budget = '';
+  if(limit != null){
+    let cls = 'progress';
+    if(pct >= 90) cls += ' danger'; else if(pct >= 70) cls += ' warn';
+    budget = '<div class="quota-card"><div class="label"><span>本月支出</span><span>'+fmtUsd(spent)+' / '+fmtUsd(limit)+'</span></div>'+
+      '<div class="value">'+(pct==null?'—':pct.toFixed(1)+'%')+'</div>'+
+      '<div class="'+cls+'"><i style="width:'+(pct||0)+'%"></i></div>'+
+      '<div class="hint-inline" style="margin-top:6px">重置：'+esc(fmtReset(z.resets_at))+'</div></div>';
+  }
+  return '<div class="quota-card"><div class="label"><span>Zen 余额</span><span>'+esc(z.mode||z.billing_mode||'')+'</span></div>'+
+    '<div class="value">'+fmtUsd(z.balance_usd)+'</div>'+
+    '<div class="hint-inline" style="margin-top:6px">可用：'+fmtUsd(z.available_usd)+' · 更新：'+esc((z.fetched_at||'').replace('T',' '))+'</div></div>'+budget;
+}
+async function loadQuota(force){
+  try{
+    const d = await api('/admin/api/quota'+(force?'?refresh=1':''));
+    const s = d.usage || {};
+    document.getElementById('quotaPlan').textContent =
+      (d.plan||'Go') + (d.fetched_at ? ' · '+d.fetched_at.replace('T',' ') : '');
+    const eta = d.eta || {};
+    document.getElementById('quotaSummary').innerHTML =
+      serverQuotaCard('5 小时滚动', s.rolling, eta.rolling) +
+      serverQuotaCard('本周（UTC）', s.weekly, eta.weekly) +
+      serverQuotaCard('本月', s.monthly, eta.monthly);
+    document.getElementById('quotaError').textContent = d.ok ? '' :
+      ('服务端额度读取失败：'+(d.error||'未知错误')+'（下方为本地参考）');
+    document.getElementById('zenSummary').innerHTML = zenCard(d.zen);
+
+    const local = d.local || {};
+    const rows = (local.models||[]).map(x=>{
+      if(x.unlimited){
+        return '<tr><td class="mono">'+esc(x.model)+'</td><td>'+esc(x.provider)+'</td>'+
+          '<td colspan="3" class="center">∞ 无限额度</td></tr>';
+      }
+      return '<tr><td class="mono">'+esc(x.model)+'</td><td>'+esc(x.provider)+'</td>'+
+        '<td class="quota-cell">'+quotaBar(x.five_hour.used,x.five_hour.limit,x.five_hour.percent)+'</td>'+
+        '<td class="quota-cell">'+quotaBar(x.week.used,x.week.limit,x.week.percent)+'</td>'+
+        '<td class="quota-cell">'+quotaBar(x.month.used,x.month.limit,x.month.percent)+'</td></tr>';
+    }).join('');
+    document.getElementById('quotaTable').innerHTML = rows
+      ? '<div class="table-wrap"><table><thead><tr><th>模型</th><th>Provider</th><th>5 小时</th><th>近 7 天</th><th>本月</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+      : '<div class="empty">暂无本地额度数据。发起一次 OpenCode Go 请求后会自动累计。</div>';
+  }catch(e){
+    document.getElementById('quotaSummary').innerHTML = '<div class="empty">读取额度失败：'+esc(e.message||e)+'</div>';
+  }
+}
+async function reload(){
+  await api('/admin/api/reload',{method:'POST'});
+  await load();
+  toast('配置已重载');
+}
+function openAdd(){ editingIndex=-1; document.getElementById('modalTitle').textContent='添加 Provider';
+  ['fName','fUrl','fAnthropicUrl','fKey','fAnthropicKey','fModels','fProxyModels','fHeaders','fModelMap','fMeta'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('fNeedsSession').checked=false; document.getElementById('fUseProxy').checked=false;
+  document.getElementById('modalMask').classList.add('show');
+}
+function openEdit(i){ const p=CFG.providers[i]; editingIndex=i; document.getElementById('modalTitle').textContent='编辑 Provider';
+  document.getElementById('fName').value=p.name||'';
+  document.getElementById('fUrl').value=p.base_url||'';
+  document.getElementById('fAnthropicUrl').value=p.anthropic_base_url||'';
+  document.getElementById('fKey').value=p.api_key||'';
+  document.getElementById('fAnthropicKey').value=p.anthropic_api_key||'';
+  document.getElementById('fModels').value=(p.models||[]).join('\n');
+  document.getElementById('fProxyModels').value=(p.proxy_models||[]).join('\n');
+  document.getElementById('fHeaders').value=p.headers?JSON.stringify(p.headers,null,2):'';
+  document.getElementById('fNeedsSession').checked=!!p.needs_session;
+  document.getElementById('fUseProxy').checked=!!p.use_proxy;
+  document.getElementById('fModelMap').value=p.model_map?JSON.stringify(p.model_map,null,2):'';
+  document.getElementById('fMeta').value=p.model_meta?JSON.stringify(p.model_meta,null,2):'';
+  document.getElementById('modalMask').classList.add('show');
+}
+function closeModal(){ document.getElementById('modalMask').classList.remove('show'); }
+function parseLines(s){ return (s||'').split('\n').map(x=>x.trim()).filter(Boolean); }
+function parseJSON(s){ s=(s||'').trim(); if(!s) return undefined; return JSON.parse(s); }
+async function saveProvider(){
+  let headers, modelMap, meta;
+  try{
+    headers = parseJSON(document.getElementById('fHeaders').value);
+    modelMap = parseJSON(document.getElementById('fModelMap').value);
+    meta = parseJSON(document.getElementById('fMeta').value);
+  }catch(e){ toast('JSON 格式错误：'+e.message); return; }
+
+  // 保留旧对象里的未知字段（尤其是 model_meta），只覆盖表单里可编辑的项
+  const p = Object.assign({}, editingIndex>=0 ? CFG.providers[editingIndex] : {});
+  p.name = document.getElementById('fName').value.trim();
+  p.base_url = document.getElementById('fUrl').value.trim();
+  const anthropicUrl = document.getElementById('fAnthropicUrl').value.trim();
+  if(anthropicUrl) p.anthropic_base_url = anthropicUrl; else delete p.anthropic_base_url;
+  p.api_key = document.getElementById('fKey').value.trim();
+  const anthropicKey = document.getElementById('fAnthropicKey').value.trim();
+  if(anthropicKey) p.anthropic_api_key = anthropicKey; else delete p.anthropic_api_key;
+  p.models = parseLines(document.getElementById('fModels').value);
+  p.proxy_models = parseLines(document.getElementById('fProxyModels').value);
+  p.needs_session = document.getElementById('fNeedsSession').checked;
+  p.use_proxy = document.getElementById('fUseProxy').checked;
+  if(headers) p.headers = headers; else delete p.headers;
+  if(modelMap) p.model_map = modelMap; else delete p.model_map;
+  if(meta) p.model_meta = meta; else delete p.model_meta;
+
+  if(!p.name || !p.base_url){ toast('名称和 Base URL 必填'); return; }
+  if(!p.models.length){ toast('至少填一个模型'); return; }
+  if(editingIndex>=0) CFG.providers[editingIndex]=p; else CFG.providers.push(p);
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r.ok){ toast('保存失败：'+(r.error||'未知错误')); await load(); return; }
+  closeModal(); await load();
+  toast('已保存');
+}
+async function delProvider(i){
+  if(CFG.providers.length<=1){ toast('至少保留一个 Provider'); return; }
+  if(!confirm('确定删除该 Provider？')) return;
+  CFG.providers.splice(i,1);
+  const r = await api('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Config-Revision':CFG_REVISION},body:JSON.stringify(CFG)});
+  if(!r.ok){ toast('删除失败：'+(r.error||'未知错误')); await load(); return; }
+  await load(); toast('已删除');
+}
+async function testProvider(i){
+  const p=CFG.providers[i];
+  const model=(p.models||[])[0];
+  toast('测试 '+model+' …');
+  const r=await api('/admin/api/test?model='+encodeURIComponent(model));
+  alert(r.ok?('✅ '+model+' 通了\n\n'+(r.reply||'').slice(0,500)):('❌ '+model+' 失败\n\n'+(r.error||'').slice(0,500)));
+}
+async function testModel(el){
+  const model = el.dataset.model;
+  if(el.classList.contains('testing')) return;
+  const orig = el.innerHTML;
+  el.classList.remove('ok','fail'); el.classList.add('testing');
+  el.textContent = model + ' ⏳';
+  try{
+    const r = await api('/admin/api/test?model='+encodeURIComponent(model));
+    if(r.ok){
+      el.classList.add('ok');
+      el.title = '✅ '+model+' ['+r.route+'] '+(r.reply||'').slice(0,200);
+    }else{
+      el.classList.add('fail');
+      el.title = '❌ '+model+' '+((r.error||'')+(r.status?(' HTTP '+r.status):'')).slice(0,300);
+    }
+  }catch(e){
+    el.classList.add('fail'); el.title = '❌ '+model+' '+e;
+  }
+  el.classList.remove('testing');
+  el.innerHTML = orig;
+}
+async function testAll(){
+  const tags = Array.from(document.querySelectorAll('.provider .tag[data-model]'));
+  if(!tags.length){ toast('没有可测试的模型'); return; }
+  toast('开始测试 '+tags.length+' 个模型…');
+  const CONCURRENCY = 5;
+  for(let i=0;i<tags.length;i+=CONCURRENCY){
+    await Promise.all(tags.slice(i,i+CONCURRENCY).map(t=>testModel(t)));
+  }
+  const ok = document.querySelectorAll('.tag.ok').length;
+  const fail = document.querySelectorAll('.tag.fail').length;
+  toast('测试完成：✅ '+ok+' 通，❌ '+fail+' 失败');
+}
+document.getElementById('modalMask').addEventListener('click',e=>{ if(e.target.id==='modalMask') closeModal(); });
+load();
+setInterval(loadQuota, 60000);
+setInterval(loadUsage, 5000);
+</script>
+</body>
+</html>

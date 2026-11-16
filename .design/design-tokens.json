@@ -1,0 +1,148 @@
+{
+  "$schema": "design-tokens/1.0.0",
+  "product": "聚合网关管理端",
+  "source": ".design/DESIGN.md",
+  "register": "Product",
+  "mode": "Operate",
+  "scales": {
+    "DESIGN_VARIANCE": 3,
+    "MOTION_INTENSITY": 1,
+    "VISUAL_DENSITY": 7
+  },
+  "colors": {
+    "accent":        { "value": "#2563EB", "role": "主色：主按钮 / 当前 tab / 唯一主数字" },
+    "accentOn":      { "value": "#FFFFFF", "role": "主色上文字" },
+    "accentHover":   { "value": "#1D4ED8" },
+    "accentSoft":    { "value": "#E8F0FE" },
+    "bg":            { "value": "#F4F6F9", "role": "画布背景" },
+    "surface":       { "value": "#FFFFFF", "role": "卡片 / 顶栏 / 表格底" },
+    "raised":        { "value": "#EDF1F6", "role": "三级面：内嵌区 / 表头 / tag / 进度轨" },
+    "border":        { "value": "#DDE3EC" },
+    "ink":           { "value": "#16202E", "role": "正文" },
+    "ink2":          { "value": "#3A4657", "role": "次级墨" },
+    "muted":         { "value": "#5B6675", "role": "次要文字" },
+    "danger":        { "value": "#B42318" },
+    "warn":          { "value": "#8A5A00" },
+    "success":       { "value": "#1F7A4D" },
+    "info":          { "value": "#1D4ED8" },
+    "infoSoft":      { "value": "#E8F0FE" },
+    "warnSoft":      { "value": "#FBF0DA" },
+    "dangerSoft":    { "value": "#FDECEA" },
+    "successSoft":   { "value": "#E7F4EC" },
+    "logBg":         { "value": "#0F172A", "role": "深色终端（产品自带，继承）" },
+    "logFg":         { "value": "#E2E8F0" },
+    "focus":         { "value": "#2563EB", "note": "2px 实环 + 外侧 2px rgba(37,99,235,.18) 柔环" }
+  },
+  "contrast": {
+    "method": "WCAG 2.1 relative luminance, computed 2026-11-13 (not estimated)",
+    "inkOnBg": 15.15,
+    "inkOnSurface": 16.40,
+    "inkOnRaised": 14.46,
+    "mutedOnBg": 5.38,
+    "mutedOnSurface": 5.83,
+    "mutedOnRaised": 5.14,
+    "accentOnOnAccent": 5.17,
+    "accentOnSurface": 5.17,
+    "dangerOnSurface": 6.57,
+    "logFgOnLogBg": 14.48,
+    "focusRingOnSurface": 5.17,
+    "infoDeepOnInfoSoft": 5.85,
+    "warnDeepOnWarnSoft": 5.24,
+    "dangerDeepOnDangerSoft": 5.75,
+    "successDeepOnSuccessSoft": 4.70,
+    "raisedVsSurface": 1.13,
+    "bgVsSurface": 1.08,
+    "threshold": { "text": 4.5, "nonText": 3.0 },
+    "allTextPass": true
+  },
+  "typography": {
+    "families": { "ui": "var(--font-ui)", "mono": "var(--font-mono)" },
+    "fontUi": "-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"PingFang SC\",\"Hiragino Sans GB\",\"Microsoft YaHei\",\"Noto Sans CJK SC\",\"Source Han Sans SC\",sans-serif",
+    "fontMono": "ui-monospace,SFMono-Regular,Menlo,Consolas,\"Liberation Mono\",monospace",
+    "externalFonts": false,
+    "weights": [400, 500],
+    "chineseLineHeight": { "body": 1.7, "heading": 1.3, "letterSpacing": "0 (never negative)" },
+    "sizes": [
+      { "token": "--fs-1", "px": 11, "lineHeight": 1.5, "weight": 400, "use": "版本角标 / 表头 / 时间戳 / quota-text" },
+      { "token": "--fs-2", "px": 12, "lineHeight": 1.5, "weight": 400, "use": "表格单元 / tag / hint / mono ID 与端点" },
+      { "token": "--fs-3", "px": 13, "lineHeight": 1.5, "weight": 500, "use": "sm 按钮 / input / textarea / empty / 小节标题" },
+      { "token": "--fs-4", "px": 14, "lineHeight": 1.7, "weight": 400, "use": "基准正文 / card h2 / provider 名 / 列表主行" },
+      { "token": "--fs-5", "px": 16, "lineHeight": 1.5, "weight": 500, "use": "屏标题 h1 / field label / header 产品名" },
+      { "token": "--fs-6", "px": 20, "lineHeight": 1.3, "weight": 500, "use": "次级数值 / 面板小标题" },
+      { "token": "--fs-7", "px": 24, "lineHeight": 1.3, "weight": 500, "use": "上游板首个 Provider 名 / 次级大数" },
+      { "token": "--fs-8", "px": 32, "lineHeight": 1.3, "weight": 500, "use": "每屏唯一主角数字；全站标题与数字上限" }
+    ],
+    "forbiddenPx": [15, 17, 18, 19, 21, 22],
+    "perScreenMaxDistinctSizes": 5
+  },
+  "spacing": {
+    "scale": [4, 8, 12, 16, 24, 32, 48, 72],
+    "unit": "px, multiples of 4 only",
+    "cardPadding": 24,
+    "cardGap": 16,
+    "titleToContent": 16,
+    "fieldGap": 16,
+    "labelToInput": 8,
+    "boardTopPadding": 24,
+    "betweenBoards": 32,
+    "heroToList": 24,
+    "listToLogBand": 48,
+    "tableGap": 16,
+    "providersToModelTable": 32,
+    "betweenConfigCards": 32
+  },
+  "radius": {
+    "sm": { "px": 8, "use": "按钮 / input / textarea / tag / 状态 chip" },
+    "md": { "px": 12, "use": "卡片 / 板 / table-wrap / provider / log / 进度轨" },
+    "lg": { "px": 16, "use": "仅弹窗 modal" },
+    "forbiddenPx": [6, 10, 14, 999]
+  },
+  "layout": {
+    "container": 1120,
+    "canvasPaddingDesktop": 24,
+    "canvasPaddingMobile": 16,
+    "grid": { "desktop": { "columns": 12, "gutter": 16 }, "tablet": { "columns": 8, "gutter": 16 }, "mobile": { "columns": 4, "gutter": 12 } },
+    "spans": [12, 6, 3],
+    "alignItems": "start",
+    "breakpoints": { "mobile": 640, "tablet": 1024, "verifyWidths": [375, 834, 1440] }
+  },
+  "zIndex": {
+    "base": 0, "dropdown": 100, "sticky": 200, "overlay": 300,
+    "modal": 400, "toast": 500, "tooltip": 600
+  },
+  "elevation": {
+    "flat": "none",
+    "ring": "0 0 0 1px var(--border)",
+    "raised": "0 8px 28px rgba(22,32,46,.16)",
+    "rule": "平面表面用 1px 发丝线，浮起表面用阴影；两者永不叠加"
+  },
+  "motion": {
+    "fast": "150ms", "base": "200ms", "ease": "cubic-bezier(.2,0,0,1)",
+    "allowed": ["button hover", "tab/link color", "toast in-out"],
+    "tabSwitch": "none (instant display swap)",
+    "reducedMotion": "all animation/transition -> none"
+  },
+  "icons": {
+    "library": "inline SVG only, 1.5px stroke, currentColor, no CDN",
+    "sizes": [16, 20, 24],
+    "emojiAllowed": false,
+    "charMap": { "🎁": "·免", "🌐": "·代理", "✅": "是", "❌": "否", "⏳": "…", "⚠": "!", "⚡": "inline SVG in header" },
+    "implementation": "display-layer script text-node mapping + MutationObserver; frozen <script> untouched"
+  },
+  "a11y": {
+    "minTextContrast": 4.5,
+    "minNonTextContrast": 3.0,
+    "touchTarget": 44,
+    "buttonGap": 8,
+    "focusVisible": "0 0 0 2px var(--accent), 0 0 0 4px rgba(37,99,235,.18)",
+    "safeArea": "env(safe-area-inset-bottom) on toast and bottom actions",
+    "keyboard": "tablist arrow keys / Home-End / Esc closes modal and returns focus"
+  },
+  "forbidden": [
+    "purple-to-pink gradient", "any decorative linear-gradient", "glow box-shadow",
+    "backdrop-filter / glassmorphism", "static card shadow", "emoji as functional icon",
+    "hardcoded hex in components", "pure #000 / #808080", "Lorem ipsum / Welcome to",
+    "fabricated metrics", "eyebrow / kicker labels", "01/02/03 section numbering",
+    "collapse/hide/mask to reduce information"
+  ]
+}

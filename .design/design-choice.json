@@ -1,0 +1,53 @@
+{
+  "library": "1.0.0",
+  "product": "聚合网关管理端",
+  "style": "vercel-mono",
+  "styleContrast": "terminal",
+  "palette": "slate-light",
+  "paletteDark": "slate-dark",
+  "typePair": "jetbrains-inter",
+  "layouts": [
+    "app-shell-tab",
+    "dashboard-grid",
+    "stat-band",
+    "list-detail",
+    "table-dense",
+    "settings-page"
+  ],
+  "uxRules": [
+    "nav-01",
+    "nav-06",
+    "nav-03",
+    "form-01",
+    "nav-02"
+  ],
+  "notes": {
+    "register": "Product",
+    "mode": "Operate",
+    "scales": { "DESIGN_VARIANCE": 3, "MOTION_INTENSITY": 1, "VISUAL_DENSITY": 7 },
+    "direction": "一块可换的仪表板：4 块板一次一块，每板 12 栏 / 单一容器 1120px / 一个主角数字 / 无英雄头",
+    "dealResult": "design_query.py --deal 的三张牌（dense-tiles / editorial-report / quiet-instrument）全部弃用：印刷年鉴要真实照片与 >32px 标题，安静仪器放不下 15 列表格，井然的板主张边到边单板与 4 组切换相冲。继承 dense-tiles 的『12 栏井然格』与『禁止格内嵌套卡片』两条。理由见 DESIGN.md §0。",
+    "deviations": [
+      {
+        "field": "palette",
+        "libraryPrimary": "#63707e",
+        "actualAccent": "#2563EB",
+        "reason": "#2563EB 是源文件 L8 的既有 VI 蓝，从项目继承而非从库挑；按 design-tells.md §三之四『品牌既有色保留并登记』处理。slate-light 只提供三级明度骨架与语义四色。",
+        "registeredBy": "颜好看 / 2026-11-13",
+        "reviewAt": "换 VI 时复审"
+      },
+      {
+        "field": "typePair",
+        "reason": "jetbrains-inter 的 id 登记的是『等宽给数字与 ID、无衬线给界面』这组关系；用户禁外部字体，实际用系统字体栈 + 系统 mono 栈落地，不加载 Inter / JetBrains Mono 文件。",
+        "registeredBy": "颜好看 / 2026-11-13"
+      },
+      {
+        "field": "paletteDark",
+        "reason": "只登记不实现：IDE 是 light 主题，页面本来就是浅色，用户未要求深色模式。",
+        "registeredBy": "颜好看 / 2026-11-13"
+      }
+    ],
+    "layoutFamilies": ["app", "dashboard", "stat", "list", "table", "settings"],
+    "deliverables": [".design/DESIGN.md", ".design/design-tokens.json", ".design/design-choice.json"]
+  }
+}

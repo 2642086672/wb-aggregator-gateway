@@ -1,0 +1,55 @@
+{
+  "root": "D:\\网关管理器",
+  "markers": [
+    "requirements.txt"
+  ],
+  "totals": {
+    "codeFiles": 8,
+    "bytes": 7449832,
+    "lines": 4425,
+    "pages": 1,
+    "tests": 0
+  },
+  "entries": [],
+  "pages": [
+    "dom_dump.html"
+  ],
+  "tests": [],
+  "bigFiles": [
+    {
+      "path": "gateway.py",
+      "lines": 3190
+    },
+    {
+      "path": "verify_price.js",
+      "lines": 321
+    },
+    {
+      "path": "usage_admin_check.js",
+      "lines": 313
+    }
+  ],
+  "buckets": {
+    "(根)": {
+      "files": 8,
+      "lines": 4425
+    }
+  },
+  "dependencies": [],
+  "dependencyCount": 0,
+  "scripts": {},
+  "readFirst": [
+    {
+      "path": "dom_dump.html",
+      "why": "页面：从这里能看清呈现层约定"
+    },
+    {
+      "path": "gateway.py",
+      "why": "最长的文件（3190 行）：通常是最需要拆的"
+    },
+    {
+      "path": "verify_price.js",
+      "why": "最长的文件（321 行）：通常是最需要拆的"
+    }
+  ]
+}
