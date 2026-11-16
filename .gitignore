@@ -45,7 +45,7 @@ venv/
 .env/**
 
 # Internal working notes and design pipeline artefacts
-.workbuddy/
+# (.design/ 与 PROJECT_STATE.md 按用户要求一并上传；只排除其中的运行时缓存)
 .design/_edge_*/
 .design/_dom_*.html
 .design/__pycache__/
@@ -57,6 +57,4 @@ venv/
 
 # Local preview instances / scratch
 admin_preview.html
-PROJECT_STATE.md
-项目分析报告.md
 2026-11-07-17-11-42.zip
