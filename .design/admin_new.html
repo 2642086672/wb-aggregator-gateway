@@ -213,6 +213,29 @@ details[open] summary::before{content:"- "}
 /* 上游 / 规则：两卡之间 32px */
 #view-upstream > .card:nth-child(2),#view-rules > .card:nth-child(2){margin-top:var(--s-4)}
 
+
+/* ===== 用量页重构（ui/usage-redesign）：KPI 精简 + Top 5 + 筛选分页 ===== */
+#usageTotals{grid-template-columns:repeat(4,1fr)}
+#usageTotals .stat .value{font-size:var(--fs-6)}
+#usageTotals .stat.hero .value{font-size:var(--fs-8);color:var(--accent)}
+#usageTotals .stat .sub{font-size:var(--fs-2);color:var(--muted);margin-top:var(--s-1);line-height:1.6}
+#view-usage .table-wrap table{font-size:var(--fs-3)}
+#view-usage .table-wrap th,#view-usage .table-wrap td{padding:var(--s-2)}
+.usage-filter{display:flex;gap:var(--s-2);flex-wrap:wrap;align-items:center;margin:var(--s-4) 0 var(--s-3)}
+.usage-filter input[type=text],.usage-filter select{padding:var(--s-2) var(--s-3);border:1px solid var(--border);border-radius:var(--r-sm);font-size:var(--fs-3);font-family:inherit;background:var(--surface);color:var(--ink);min-height:44px}
+.usage-filter input[type=text]{flex:1 1 220px;min-width:180px}
+.usage-filter label.toggle{display:inline-flex;align-items:center;gap:var(--s-2);font-size:var(--fs-3);color:var(--ink-2);cursor:pointer;min-height:44px}
+.usage-filter input[type=checkbox]{accent-color:var(--success);width:18px;height:18px}
+.top5-row{display:grid;grid-template-columns:minmax(140px,240px) 1fr 110px;gap:var(--s-3);align-items:center;padding:var(--s-1) 0;font-size:var(--fs-3)}
+.top5-row .m{font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top5-row .n{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--font-mono)}
+.top5-bar{height:8px;background:var(--raised);border-radius:var(--r-md);overflow:hidden}
+.top5-bar>i{display:block;height:100%;background:var(--accent)}
+.pager{display:flex;gap:var(--s-2);align-items:center;justify-content:flex-end;margin-top:var(--s-3);font-size:var(--fs-3);color:var(--ink-2)}
+.pager button{min-height:36px;padding:var(--s-1) var(--s-3)}
+tr.detail-row td{background:var(--raised);font-size:var(--fs-2);white-space:normal;line-height:1.7;color:var(--ink-2)}
+td .row-toggle{cursor:pointer;color:var(--accent)}
+
 /* ===== 平板 8 栏 / 手机 4 栏（§4.2 / §7） ===== */
 @media (max-width:1024px){
   .view.is-active{grid-template-columns:repeat(8,1fr);gap:var(--s-4)}
@@ -331,6 +354,10 @@ details[open] summary::before{content:"- "}
     <div class="stats" id="usageTotals"></div>
     <div id="liveTps" class="hint-inline" style="margin-top:10px"></div>
     <div style="margin-top:18px">
+      <h2 class="sub-h">用量 Top 5 模型</h2>
+      <div id="usageTop5"><div class="empty">暂无用量记录</div></div>
+    </div>
+    <div style="margin-top:18px">
       <h2 class="sub-h">按厂商</h2>
       <div id="usageVendors"></div>
       <div class="hint-inline" style="margin-top:6px">厂商按模型名推断（claude→Anthropic、glm→智谱、gemini→Google…）；只统计经过网关的流量，OpenCode 其它客户端的用量无法计入 token。</div>
@@ -339,9 +366,16 @@ details[open] summary::before{content:"- "}
       <h2 class="sub-h">按 Provider</h2>
       <div id="usageProviders"></div>
     </div>
+    <div class="usage-filter" id="usageFilter">
+      <input type="text" id="usageSearch" placeholder="搜索模型…" aria-label="搜索模型">
+      <select id="usageVendorFilter" aria-label="按厂商筛选"><option value="">全部厂商</option></select>
+      <label class="toggle"><input type="checkbox" id="usageHideUnused" checked> 隐藏未使用模型</label>
+      <span class="hint-inline" id="usageHiddenNote"></span>
+    </div>
     <div style="margin-top:18px">
       <h2 class="sub-h">按模型</h2>
       <div id="usageModels"></div>
+      <div class="pager" id="usagePager"></div>
     </div>
   </div>
 
@@ -1084,5 +1118,174 @@ setInterval(loadUsage, 5000);
   obs.observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['title']});
 })();
 </script>
+<script>
+/* 用量页重构（ui/usage-redesign）。
+   原有 3 个 script 块逐字节不动；本块只新增：覆盖 window.loadUsage 与
+   window.renderUsageTable（仅按模型表），其它 Tab、后端、/admin/api/* 均不动。 */
+(function(){
+  'use strict';
+  var _origRenderUsageTable = window.renderUsageTable;
+  var PAGE_SIZE = 10;
+  var state = { models: [], page: 1, search: '', vendor: '', hideUnused: true, expanded: {} };
+  var listenersBound = false;
+
+  function filteredModels(){
+    var q = state.search.trim().toLowerCase();
+    return state.models.filter(function(x){
+      if (state.hideUnused && Number(x.requests || 0) === 0) return false;
+      if (state.vendor && String(x.vendor || '') !== state.vendor) return false;
+      if (q && String(x.model || '').toLowerCase().indexOf(q) === -1) return false;
+      return true;
+    });
+  }
+  function hiddenCount(){
+    return state.models.filter(function(x){ return Number(x.requests || 0) === 0; }).length;
+  }
+  function detailHtml(x){
+    var avgLatency = x.requests ? Math.round(Number(x.latency_ms || 0) / Number(x.requests || 1)) + ' ms' : '—';
+    return '厂商 ' + esc(x.vendor || '—') + ' · Provider ' + esc(x.provider || '—')
+      + ' · 总 Token ' + fmtTokens(x.total_tokens) + ' · 缓存读 ' + fmtTokens(x.cached_tokens)
+      + ' · 推理 Token ' + fmtTokens(x.reasoning_tokens) + ' · 平均 TPS ' + fmtTps(x.avg_tps)
+      + ' · 标价估算 $' + Number(x.list_cost || 0).toFixed(6)
+      + ' · 错误 ' + fmtCount(x.errors) + ' · 无用量 ' + fmtCount(x.usage_missing)
+      + ' · 平均延迟 ' + avgLatency + ' · 最近调用 ' + esc(x.last_used || '—');
+  }
+  function renderModelTable(items){
+    state.models = items || [];
+    var list = filteredModels();
+    var pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+    if (state.page > pages) state.page = pages;
+    if (state.page < 1) state.page = 1;
+    var start = (state.page - 1) * PAGE_SIZE;
+    var pageItems = list.slice(start, start + PAGE_SIZE);
+    var note = document.getElementById('usageHiddenNote');
+    if (note) {
+      var hc = hiddenCount();
+      note.textContent = state.hideUnused && hc > 0
+        ? '已隐藏 ' + hc + ' 个未使用模型'
+        : (list.length + ' 个模型');
+    }
+    var pager = document.getElementById('usagePager');
+    if (pager) {
+      pager.innerHTML = '<button type="button" class="sm" id="usagePrev"' + (state.page <= 1 ? ' disabled' : '') + '>上一页</button>'
+        + '<span>第 ' + state.page + ' / ' + pages + ' 页 · 共 ' + list.length + ' 个模型</span>'
+        + '<button type="button" class="sm" id="usageNext"' + (state.page >= pages ? ' disabled' : '') + '>下一页</button>';
+      var prev = document.getElementById('usagePrev');
+      var next = document.getElementById('usageNext');
+      if (prev) prev.onclick = function(){ if (state.page > 1) { state.page--; refreshModelTable(); } };
+      if (next) next.onclick = function(){ if (state.page < pages) { state.page++; refreshModelTable(); } };
+    }
+    if (!pageItems.length) return '<div class="empty">暂无用量记录</div>';
+    var rows = pageItems.map(function(x){
+      var key = String(x.model || '');
+      var main = '<tr><td class="mono"><span class="row-toggle" data-model="' + esc(key) + '">' + esc(key) + '</span></td>'
+        + '<td class="num">' + fmtCount(x.requests) + '</td>'
+        + '<td class="num">' + fmtTokens(x.input_tokens) + '</td>'
+        + '<td class="num">' + fmtTokens(x.output_tokens) + '</td>'
+        + '<td class="num">' + fmtRate(x.cache_hit_rate) + '</td>'
+        + '<td class="num">$' + Number(x.cost || 0).toFixed(6) + '</td></tr>';
+      if (state.expanded[key]) {
+        main += '<tr class="detail-row"><td colspan="6">' + detailHtml(x) + '</td></tr>';
+      }
+      return main;
+    }).join('');
+    return '<div class="table-wrap"><table><thead><tr>'
+      + '<th>模型</th><th>请求</th><th>输入 Token</th><th>输出 Token</th><th>缓存命中率</th><th>实扣（$）</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+  function renderTop5(models){
+    var el = document.getElementById('usageTop5');
+    if (!el) return;
+    var top = (models || []).slice().sort(function(a, b){
+      return Number(b.total_tokens || 0) - Number(a.total_tokens || 0);
+    }).slice(0, 5);
+    if (!top.length) { el.innerHTML = '<div class="empty">暂无用量记录</div>'; return; }
+    var max = Math.max.apply(null, top.map(function(x){ return Number(x.total_tokens || 0); })) || 1;
+    el.innerHTML = top.map(function(x){
+      var pct = Math.max(2, Math.round(Number(x.total_tokens || 0) / max * 100));
+      return '<div class="top5-row"><span class="m">' + esc(x.model || '') + '</span>'
+        + '<span class="top5-bar"><i style="width:' + pct + '%"></i></span>'
+        + '<span class="n">' + fmtTokens(x.total_tokens) + '</span></div>';
+    }).join('');
+  }
+  function refreshModelTable(){
+    var wrap = document.getElementById('usageModels');
+    if (wrap) wrap.innerHTML = renderModelTable(state.models);
+  }
+  function bindFilters(){
+    if (listenersBound) return;
+    listenersBound = true;
+    var search = document.getElementById('usageSearch');
+    var vendorSel = document.getElementById('usageVendorFilter');
+    var hideBox = document.getElementById('usageHideUnused');
+    if (search) search.addEventListener('input', function(){ state.search = search.value; state.page = 1; refreshModelTable(); });
+    if (vendorSel) vendorSel.addEventListener('change', function(){ state.vendor = vendorSel.value; state.page = 1; refreshModelTable(); });
+    if (hideBox) hideBox.addEventListener('change', function(){ state.hideUnused = hideBox.checked; state.page = 1; refreshModelTable(); });
+    var wrap = document.getElementById('usageModels');
+    if (wrap) wrap.addEventListener('click', function(e){
+      var t = e.target && e.target.closest ? e.target.closest('.row-toggle') : null;
+      if (!t) return;
+      var key = t.getAttribute('data-model');
+      if (state.expanded[key]) delete state.expanded[key]; else state.expanded[key] = true;
+      refreshModelTable();
+    });
+  }
+  function fillVendorOptions(models){
+    var sel = document.getElementById('usageVendorFilter');
+    if (!sel) return;
+    var seen = {};
+    (models || []).forEach(function(x){ if (x.vendor) seen[x.vendor] = true; });
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">全部厂商</option>' + Object.keys(seen).sort().map(function(v){
+      return '<option value="' + esc(v) + '">' + esc(v) + '</option>';
+    }).join('');
+    sel.value = cur;
+  }
+
+  window.renderUsageTable = function(items, type){
+    if (type !== 'model') return _origRenderUsageTable(items, type);
+    bindFilters();
+    return renderModelTable(items);
+  };
+
+  window.loadUsage = async function(){
+    try {
+      var d = await api('/admin/api/usage');
+      var t = d.totals || {};
+      var live = d.live || {};
+      var goStat = (d.providers || []).find(function(p){ return p.name === 'opencode-go'; }) || {};
+      document.getElementById('usageSince').textContent = d.since ? ('统计起始 ' + d.since + ' · 更新 ' + (d.updated || '—')) : '';
+      /* 12 个 KPI → 4 个主数字；其余 8 个收进小字，数值与文案与原版一致 */
+      document.getElementById('usageTotals').innerHTML =
+        '<div class="stat"><div class="label">请求数</div><div class="value">' + fmtCount(t.requests) + '</div>'
+        + '<div class="sub">Go 本地 Token ' + fmtTokens(goStat.total_tokens) + ' · 用量缺失请求 ' + fmtCount(t.usage_missing) + '</div></div>'
+        + '<div class="stat hero"><div class="label">总 Token</div><div class="value">' + fmtTokens(t.total_tokens) + '</div>'
+        + '<div class="sub">输入 ' + fmtTokens(t.input_tokens) + ' · 输出 ' + fmtTokens(t.output_tokens) + ' · 推理 ' + fmtTokens(t.reasoning_tokens) + '</div></div>'
+        + '<div class="stat"><div class="label">缓存命中率</div><div class="value">' + fmtRate(t.cache_hit_rate) + '</div>'
+        + '<div class="sub">缓存读 Token ' + fmtTokens(t.cached_tokens) + '</div></div>'
+        + '<div class="stat"><div class="label">实扣</div><div class="value">$' + Number(t.cost || 0).toFixed(6) + '</div>'
+        + '<div class="sub">按模型价估算 $' + Number(t.list_cost || 0).toFixed(6) + '</div></div>';
+      var liveRows = (live.by_model || []).map(function(x){ return esc(x.model) + ' ' + fmtTps(x.output_tps); }).join(' · ');
+      document.getElementById('liveTps').innerHTML = Number(live.requests || 0) > 0
+        ? '近 ' + (live.span_seconds || live.window_seconds || 60) + ' 秒：输出 ' + fmtTps(live.output_tps)
+          + ' · 输入 ' + fmtTps(live.input_tps) + ' · 合计 ' + fmtTps(live.total_tps)
+          + '（' + fmtCount(live.requests) + ' 个请求）'
+          + (liveRows ? '<br>按模型：' + liveRows : '')
+        : '近 ' + (live.window_seconds || 60) + ' 秒暂无 agent 请求。';
+      document.getElementById('usageVendors').innerHTML = _origRenderUsageTable(d.vendors || [], 'vendor');
+      document.getElementById('usageProviders').innerHTML = _origRenderUsageTable(d.providers || [], 'provider');
+      fillVendorOptions(d.models || []);
+      renderTop5(d.models || []);
+      document.getElementById('usageModels').innerHTML = window.renderUsageTable(d.models || [], 'model');
+    } catch (e) {
+      document.getElementById('usageTotals').innerHTML = '<div class="empty">读取用量失败：' + esc(e.message || e) + '</div>';
+    }
+  };
+
+  bindFilters();
+  loadUsage();
+})();
+</script>
 </body>
 </html>
+
