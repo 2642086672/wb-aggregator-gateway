@@ -58,3 +58,7 @@ venv/
 # Local preview instances / scratch
 admin_preview.html
 2026-11-07-17-11-42.zip
+
+# Multi-instance test leftovers (contain live credentials)
+instance2/
+instance*/
