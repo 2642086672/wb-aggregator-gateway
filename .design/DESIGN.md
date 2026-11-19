@@ -86,7 +86,7 @@ components:
 
 | 项 | 值 |
 |---|---|
-| 项目 | `D:\网关管理器`（Python 单文件 LLM 聚合网关，个人自用） |
+| 项目 | `<VENV_DIR>`（Python 单文件 LLM 聚合网关，个人自用） |
 | 基准 | `.design/admin_source.html`（797 行，`gateway.py:1141-1937` 原样抽出） |
 | 形态 | **系统模式 / 改既有系统的呈现层**，不是原型；交付物是多屏设计契约，不是一张首页稿 |
 | 模式 | **Operate**（监控 + 配置）｜寄存器：**Product**（设计服务产品，不是品牌页） |
@@ -581,9 +581,9 @@ UX（§1 分组与状态）／UI（§2 §3 §4 token）／UE（§9 反馈与无�
 
 | 门禁 | 命令 | 结果 |
 |---|---|---|
-| 设计方向登记 | `design_choice_check.py --root D:\网关管理器` | **[PASS]** `黑白极简 / 石板灰·浅色 / JetBrains Mono+Inter / 6 种版式家族`；1 条 WARN（字体对含高频默认字体）已在 `design-choice.json → notes.deviations` 登记：用户禁外部字体，实际落系统栈，id 登记的是「等宽给数字、无衬线给界面」这组关系 |
+| 设计方向登记 | `design_choice_check.py --root <VENV_DIR>` | **[PASS]** `黑白极简 / 石板灰·浅色 / JetBrains Mono+Inter / 6 种版式家族`；1 条 WARN（字体对含高频默认字体）已在 `design-choice.json → notes.deviations` 登记：用户禁外部字体，实际落系统栈，id 登记的是「等宽给数字、无衬线给界面」这组关系 |
 | 设计契约格式 | `design_doc_check.py -f .design/DESIGN.md` | **[PASS]** `ink on bg = 15.15:1` / `muted on bg = 5.38:1` / `on-accent on accent = 5.17:1` / `设计契约可校验：token 齐全、引用可解析、对比度达标`。**不带 `-f` 会报 `DD00 有界面文件但没有 DESIGN.md`**，因为 `CANDS` 只找 `DESIGN.md / docs/ / design/`，不找 `.design/`——是门禁的路径假设与团队产物路径不一致，不是契约缺项；QA 用 `-f` 即可 |
-| 禁物与无障碍 | `craft_rules_check.py --root D:\网关管理器` | 扫的是**改造前的 `admin_source.html`**，5 FAIL / 1 WARN，逐条见下表 |
+| 禁物与无障碍 | `craft_rules_check.py --root <VENV_DIR>` | 扫的是**改造前的 `admin_source.html`**，5 FAIL / 1 WARN，逐条见下表 |
 
 `craft_rules_check` 命中的 5 项恰好是本次要修的东西，不是新缺陷：
 

@@ -12,8 +12,8 @@ import shutil
 import subprocess
 import sys
 
-SRC = pathlib.Path(r"D:\网关管理器\gateway.py")
-DST = pathlib.Path(r"C:\Users\Administrator\WorkBuddy\2026-11-07-17-11-42\gateway.py")
+SRC = pathlib.Path(r"<VENV_DIR>\gateway.py")
+DST = pathlib.Path(r"<PROJECT_DIR>\gateway.py")
 
 
 def routing(text):

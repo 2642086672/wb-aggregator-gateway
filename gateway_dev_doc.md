@@ -4,7 +4,7 @@
 
 > 轻量化 OpenAI + Anthropic 兼容聚合网关：多 provider 聚合、按模型自动代理/直连、带网页管理端。
 > 单文件 Python（标准库 + requests），无数据库、无前端构建。
-> **当前版本：v1.2.0（2026-11-07）**
+> **当前版本：v1.5.1（2026-11-17）**
 
 ---
 
@@ -23,7 +23,7 @@
 
 | 客户端类型 | Base URL / API 地址 | API Key | 模型 |
 |---|---|---|---|
-| OpenAI 兼容（WorkBuddy、Cherry Studio、OpenAI SDK） | `http://127.0.0.1:8787/v1`；局域网用 `http://192.168.1.123:8787/v1` | 管理端「客户端接入密钥」里的网关 key（`sk-gw-...`） | `/v1/models` 返回的 id，如 `gpt-6-luna`、`glm-5.3-flash` |
+| OpenAI 兼容（WorkBuddy、Cherry Studio、OpenAI SDK） | `http://127.0.0.1:8787/v1`；局域网用 `http://192.168.1.100:8787/v1` | 管理端「客户端接入密钥」里的网关 key（`sk-gw-...`） | `/v1/models` 返回的 id，如 `gpt-6-luna`、`glm-5.3-flash` |
 | Anthropic 兼容（Claude Code、Anthropic SDK） | `http://127.0.0.1:8787`；局域网同上换成主机 IP | 同上 | 同上（OpenCode 支持跨协议） |
 
 - **只填 Base URL，不要填完整的 `/v1/chat/completions`**；客户端会自己拼路径。如果某个客户端把字段叫「接口地址」且要求完整路径，再填 `http://127.0.0.1:8787/v1/chat/completions`。
@@ -429,14 +429,15 @@ OpenCode 有两套模型目录，网关按 provider 分开：
 默认配置 `"listen": {"host": "0.0.0.0", "port": 8787}`，本机和同一局域网设备都能访问：
 
 ```text
-OpenAI:     http://192.168.1.123:8787/v1
-Anthropic:  http://192.168.1.123:8787
+OpenAI:     http://192.168.1.100:8787/v1
+Anthropic:  http://192.168.1.100:8787
 ```
 
 管理端「概览」的「监听」和端点卡片会直接用服务端枚举到的局域网 IP 显示，不需要手改配置。`GET /admin/api/status` 返回 `lan_urls`。
 
 要点：
 
+0. **不要用 TUN/虚拟网卡 IP 填模型地址**（1.4.4 修复）：开了 Clash Meta / cfw-tap 后，`198.18.0.1` 这类地址会被客户端代理（如 `127.0.0.1:7897`）接管，最终返回 `502 Server error (proxy: ... -> http://198.18.0.1:8788)`。网关现在枚举 `lan_urls` 时会跳过 `Meta`、`cfw-tap`、`vEthernet` 等虚拟网卡和 `198.18.0.0/15` 网段，只显示真实 WLAN/以太网地址（如 `192.168.1.100`）。本机客户端一律用 `127.0.0.1`。
 1. **改 `listen.host` 后必须重启进程**（HTTP 服务只在启动时 bind），热重载不会改监听地址。
 2. **`/v1/*` 仍需要网关 key**：局域网客户端填 `client_auth.keys` 里的 `sk-gw-...`，不是上游 provider key。
 3. **管理端默认只允许本机**：非回环地址访问 `/admin*` 返回 403，避免同网段的人看到配置里的 provider key。
@@ -446,7 +447,7 @@ Anthropic:  http://192.168.1.123:8787
    "admin": {"allow_remote": true, "token": "换成一串随机值"}
    ```
 
-   然后访问 `http://192.168.1.123:8787/admin?token=...`，验证通过后会种一个 HttpOnly cookie，后续页面和 API 自动带上；也可以直接带 `X-Admin-Token` 请求头。`allow_remote=true` 但 `token` 为空时仍然拒绝远程访问。
+   然后访问 `http://192.168.1.100:8787/admin?token=...`，验证通过后会种一个 HttpOnly cookie，后续页面和 API 自动带上；也可以直接带 `X-Admin-Token` 请求头。`allow_remote=true` 但 `token` 为空时仍然拒绝远程访问。
 5. **Windows 防火墙**：需要放行 TCP 8787 入站（本机已建规则 `WorkBuddy Gateway 8787`，仅 Domain/Private 网络）：
 
    ```powershell
@@ -682,29 +683,40 @@ OpenCode 的 Go 额度和 Zen 余额来自两套不同的服务端数据：
 
 ### 4.3 每秒 Token（TPS）
 
-每次请求结束时，网关用本次请求的输出 token 和总耗时估算生成速度：
+每条请求结束时记录本请求的输出速度：
 
 ```text
-output_tps = output_tokens / (latency_ms / 1000)
+单请求 output_tps = output_tokens / (latency_ms / 1000)
 ```
 
-- 统计字段：`tps_sum` / `tps_count` / `tps_max`，管理端显示「平均 TPS」；日志会打印 `tps=...`。
-- 实时窗口：内存中保留最近 60 秒的请求（`LIVE_USAGE`），`/admin/api/usage` 返回 `live`：
+- 统计字段：`tps_sum` / `tps_count` / `tps_max`，管理端表格显示「平均 TPS」；日志会打印 `tps=...`。
+- 实时窗口：内存中保留最近 60 秒完成的请求（`LIVE_USAGE`），`/admin/api/usage` 返回 `live`：
 
 ```json
 "live": {
-  "window_seconds": 60, "span_seconds": 1.0, "requests": 1,
-  "output_tokens": 120, "input_tokens": 15,
-  "output_tps": 120.0, "input_tps": 15.0, "total_tps": 135.0,
-  "by_model": [{"model": "LongCat-2.5-Preview", "provider": "longcat",
-                "output_tokens": 120, "input_tokens": 15, "requests": 1,
-                "output_tps": 120.0}]
+  "window_seconds": 60,
+  "span_seconds": 48.1,
+  "active_seconds": 29.4,
+  "requests": 3,
+  "output_tokens": 587,
+  "input_tokens": 340166,
+  "output_tps": 19.97,
+  "last_output_tps": 24.5,
+  "by_model": [{"model": "claude-haiku-5-5", "provider": "opencode-go",
+                "output_tokens": 587, "input_tokens": 340166,
+                "requests": 3, "active_seconds": 29.4,
+                "output_tps": 19.97, "last_output_tps": 24.5}]
 }
 ```
 
-- 管理端「Token 用量」新增「实时 TPS」卡片和近 60 秒明细，每 5 秒自动刷新；按厂商/Provider/模型表新增「平均 TPS」列。
-- 注意：TPS 用的是**请求总耗时**（含排队、失败重试），不是纯生成时间，只能作为相对参考；智能路由触发降级时，耗时包含前面失败尝试的时间。
+- **计算口径（v1.5.0 修复）**：`output_tps = Σ输出 token ÷ Σ请求耗时`，分母是 `active_seconds`。不能再用「距最早一次请求完成的秒数」做分母，否则刚完成的请求会虚高（120/s）、窗口拖长后又会被摊薄（12/s）。
+- `span_seconds` 只用于界面显示「近 X 秒」，`active_seconds` 才是计算分母。
+- `last_output_tps` 是最近一次请求的单请求速度，界面显示为「最近一次」。
+- `input_tps` / `total_tps` 仍按同一分母给出，仅作参考；输入 token 是提示词，不是生成量。
+- 注意：TPS 用的是**请求总耗时**（含排队、失败重试），不是纯生成时间；智能路由触发降级时，耗时包含前面失败尝试的时间。
 - 用量按实际生效模型统计，智能别名（如 `cheap`）会归入真实模型（如 `glm-5.3-flash`）。
+
+- 管理端「用量」板：5 个主 KPI（请求数 / 总 Token / 实时 TPS / 缓存命中率 / 实扣），实时 TPS 卡片显示输出平均和最近一次；下方「按厂商 / 按 Provider / 按模型」三张表，模型表支持搜索、厂商筛选、隐藏未使用、分页和行展开详情。
 
 ---
 
@@ -717,7 +729,7 @@ output_tps = output_tokens / (latency_ms / 1000)
 | `/admin/api/status` | GET | `{ok, version, providers, models, proxy_models, proxy, listen, lan_urls, uptime}` |
 | `/admin/api/logs?lines=150` | GET | `{lines: [...]}` 日志行数组 |
 | `/admin/api/routing` | GET | 智能路由状态：`{config, health, chains}`（冷却中的模型、别名解析链） |
-| `/admin/api/usage` | GET | Token 用量快照：`{since, updated, totals, providers, vendors, models, live}`，含 `cache_hit_rate`、模型 `vendor`、`avg_tps`、近 60 秒实时 TPS |
+| `/admin/api/usage` | GET | Token 用量快照：`{since, updated, totals, providers, vendors, models, live}`，含 `cache_hit_rate`、模型 `vendor`、`configured`（是否在当前配置中）、`avg_tps`、近 60 秒实时 TPS |
 | `/admin/api/quota` | GET | Go 服务端真实额度 `{usage.rolling/weekly/monthly}` + `eta` 预计用完 + `zen` 余额/预算 + `local` 本地按模型参考；`?refresh=1` 强刷 |
 | `/admin/api/usage/reprice` | POST | 按当前 `model_meta.pricing` 重算历史 `list_cost` |
 | `/admin/api/usage/reset` | POST | 清零 Token 用量统计 |
@@ -744,7 +756,14 @@ reload_config()                  # 重新读取 CFG/PROVIDERS/DEFAULT_PROXY
 
 ## 6. 管理端前端（ADMIN_HTML）
 
-**形态**：单 HTML 字符串内嵌在 `gateway.py` 里（`ADMIN_HTML` 常量），原生 HTML/CSS/JS，无外部依赖。
+**形态**：单 HTML 字符串内嵌在 `gateway.py` 里（`ADMIN_HTML` 常量），原生 HTML/CSS/JS，无外部依赖。2026-11-16 版按 `.design/DESIGN.md` 重构为 **4 块可切换仪表板**：
+
+- **运行（`#run`）**：总览、客户端接入密钥、Provider 卡片
+- **用量（`#usage`）**：KPI、实时 TPS、按厂商 / Provider / 模型表
+- **上游（`#upstream`）**：模型能力表、Go 服务端额度、Zen 余额
+- **规则（`#rules`）**：智能路由、Provider 管理、日志与重载
+
+顶部 tab 支持 `#hash` 深链和左右方向键 / Home / End 切换；同一时间只显示一块，DOM 不销毁。设计 token 见 `.design/design-tokens.json`，构建、写回、校验脚本在 `.design/`。
 
 **功能**：
 - **总览**：Provider 数、模型总数、走代理模型数、代理地址、监听地址、OpenAI 端点、Anthropic 端点、运行时长
@@ -752,7 +771,7 @@ reload_config()                  # 重新读取 CFG/PROVIDERS/DEFAULT_PROXY
 - **Provider 卡片**：名称、base_url、key（脱敏）、模型标签（点击测试）
 - **模型标签**：hover 显示 tooltip（上下文/多模态/工具/思考强度）；走代理的带 🌐
 - **模型能力表**：页面直接展示每个模型的上下文、输出上限、多模态、工具、思考强度、价格、出口，数据来自 `model_meta`
-- **Token 用量**：按 **厂商 / Provider / 模型**统计请求数、输入/输出/总 Token、缓存读、**缓存命中率**（缓存读 ÷ 输入）、推理 Token、上游实扣、按价格估算成本、错误数、平均延迟；支持刷新和重置。总览含「Go 本地 Token」（`opencode-go` provider 的累计）
+- **Token 用量**：按 **厂商 / Provider / 模型**统计请求数、输入/输出/总 Token、缓存读、**缓存命中率**（缓存读 ÷ 输入）、推理 Token、上游实扣、按价格估算成本、错误数、平均延迟；模型表支持搜索、厂商筛选、隐藏未使用、**仅当前配置**（默认开启，隐藏已删除 Provider/模型的历史行，取消勾选可看全部）、每页 10 行分页，点击模型行展开完整明细（缓存读、推理 Token、平均 TPS、标价估算、错误、无用量、平均延迟、最近调用）；支持刷新和重置。总览含「Go 本地 Token」（`opencode-go` provider 的累计）
 - **Token 计量**：小于 100 万显示实际数字（如 `999,999`）；≥100 万自动用 `百万 / 千万 / 亿 / 十亿 / 百亿 / 千亿 / 万亿`
 - **Go 服务端额度**：直接读 `/zen/go/v1/usage`，展示 5 小时滚动 / 本周 / 本月真实百分比和重置时间；下方「本地按模型累计」作为参考；70% 黄、90% 红，60 秒自动刷新
 - **测试**：点击单个模型测试；「⚡ 一键测试」批量（并发 5 路）
@@ -761,7 +780,7 @@ reload_config()                  # 重新读取 CFG/PROVIDERS/DEFAULT_PROXY
 - **双协议配置**：表单可填 OpenAI Base URL/API Key 和 Anthropic Base URL/API Key；Anthropic key 留空时复用 OpenAI key
 - **模型元数据编辑**：表单里的「模型元数据（JSON）」可直接维护 `model_meta`；编辑 Provider 时保留原有 `model_meta`/未知字段，不再丢失
 - **保存校验**：JS 侧拦截非法 JSON 并 toast；服务端返回的校验错误也会显示
-- **版本徽标**：标题旁显示 `v1.2.0`，用于确认页面是否为新版本
+- **版本徽标**：标题旁显示 `v1.5.0`，用于确认页面是否为新版本
 - **实时日志**：底部面板，可刷新
 - **重载配置**：一键热重载
 - **错误兜底**：`window.onerror` / `unhandledrejection` 把错误显示在页面上
@@ -769,16 +788,21 @@ reload_config()                  # 重新读取 CFG/PROVIDERS/DEFAULT_PROXY
 
 **关键 JS 函数**：
 ```js
-async function load()      // 拉配置 + 渲染 + 日志
-function render()          // 渲染总览 + provider 卡片
-async function testModel(el)  // 测试单个模型，更新标签颜色
-async function testAll()   // 批量测试（并发 5）
-async function saveProvider() // 保存/编辑 provider
-async function delProvider(i) // 删除
-async function reload()    // 热重载
+async function load()             // 拉配置 + 渲染 + 日志
+function render()                 // 渲染总览 + provider 卡片
+async function loadUsage()        // 拉 /admin/api/usage
+function renderUsageTable(items, type)  // 厂商/Provider 表；模型表被新块覆写
+function bindFilters()            // 模型表搜索、厂商筛选、隐藏未使用
+function renderTop5(models)       // 用量 Top5 条形
+function refreshModelTable()      // 分页/筛选后重绘模型表
+async function testModel(el)      // 测试单个模型，更新标签颜色
+async function testAll()          // 批量测试（并发 5）
+async function saveProvider()     // 保存/编辑 provider
+async function delProvider(i)     // 删除
+async function reload()           // 热重载
 ```
 
-**样式**：CSS 变量主题（`--bg`/`--card`/`--primary` 等），卡片式布局，响应式。
+**样式**：`.design/DESIGN.md` 的 slate-light token（`--bg`/`--surface`/`--border`/`--ink`/`--accent` 等），4 板 + 12 栏网格 + 密集表格，响应式；系统字体栈，不加载外部字体。
 
 ---
 
@@ -788,9 +812,9 @@ async function reload()    // 热重载
 
 1. **计划任务**（推荐，可配崩溃重试）：
 ```powershell
-$py = "C:\Users\Administrator\.workbuddy\binaries\python\versions\3.13.12\pythonw.exe"
-$script = "C:\Users\Administrator\WorkBuddy\2026-11-07-17-11-42\gateway.py"
-$wd = "C:\Users\Administrator\WorkBuddy\2026-11-07-17-11-42"
+$py = "<HOME>\.workbuddy\binaries\python\versions\3.13.12\pythonw.exe"
+$script = "<PROJECT_DIR>\gateway.py"
+$wd = "<PROJECT_DIR>"
 $action = New-ScheduledTaskAction -Execute $py -Argument $script -WorkingDirectory $wd
 $trigger = New-ScheduledTaskTrigger -AtLogOn
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit 0 -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
@@ -836,7 +860,7 @@ OpenAI/xAI/Meta 系模型（gpt-6-luna、gpt-5.6-luna、grok-4.7、muse-spark �
 ### 8.6 管理端模型列表不显示（WorkBuddy 侧问题）
 WorkBuddy 只加载通过 UI 添加的自定义模型，外部写入 `~/.workbuddy/models.json` 的条目会被忽略/覆盖（WorkBuddy 启动时用内部状态写回文件）。
 **现状**：WorkBuddy 里需手动添加模型条目（指向 `http://127.0.0.1:8787/v1`），或通过 UI 添加。
-**WorkBuddy 配置路径**：`C:\Users\Administrator\.workbuddy\models.json`
+**WorkBuddy 配置路径**：`<HOME>\.workbuddy\models.json`
 
 ### 8.7 主转发不透传 provider key（1.2.0 已修）
 早期 `_handle` 只透传客户端的 `Authorization`，配置里的 `api_key` 只在管理端测试用到。这样 WorkBuddy 必须直接填 provider key（暴露上游 key），多 provider 也无法各用各的 key。
@@ -984,12 +1008,32 @@ curl -i http://127.0.0.1:8787/v1/models
 
 ## 12. 变更记录
 
+### v1.5.1（2026-11-17）
+
+- 用量统计支持时间段筛选：`GET /admin/api/usage?period=today|week|month|all`，返回 `period`、`period_start`、`period_end`、`period_note`。管理端「用量」板新增 今日 / 本周 / 本月 / 全部 四档按钮。
+- `gateway_usage.json` 新增 `days` 按天累计（输入/输出/缓存/推理 token、实扣、估算成本、请求/错误数、TPS 累加）。时间段查询把 `days` 里对应日期的数据重新聚合；`all` 直接返回累计值。
+- 注意：按天记录从 v1.5.1 起才有，之前的历史只能通过「全部」查看；`period_note` 会提示这一点。
+- 局域网地址枚举新增 `_is_lan_ipv4()`：排除回环、`169.254/16`、`198.18.0.0/15`（Clash TUN）、以及 `Meta`/`cfw-tap`/`vEthernet`/TAP/TUN 等虚拟网卡，`lan_urls` 只返回真实 WLAN/以太网地址。
+- 同步 `.env.example` 增加 `CODINGPASS_API_KEY`；`.gitignore` 增加 `gateway_usage.json.bak*`。
+- 文档：版本号更新为 v1.5.1；`.design/admin_source.html` 基准刷新为当前线上页面，`python .design/verify_ui.py .design/admin_new.html` 恢复全通过。
+
+### v1.5.0（2026-11-16）
+
+- 管理端按 `.design/DESIGN.md` 重构为 4 块仪表板：运行 `#run` / 用量 `#usage` / 上游 `#upstream` / 规则 `#rules`；支持 hash 深链和方向键切换。
+- 用量板改为 5 个主 KPI（请求数 / 总 Token / 实时 TPS / 缓存命中率 / 实扣），新增 Top5、模型表搜索、厂商筛选、隐藏未使用、分页和行展开明细。
+- 修复实时 TPS 口径：`output_tps = Σ输出 token ÷ Σ请求耗时`（`active_seconds`），不再用「距最早完成秒数」做分母；新增 `last_output_tps`，保留 `span_seconds` 仅用于显示。
+- 修复 5 秒定时器捕获旧 `loadUsage` 的问题：改为 `setInterval(function(){ loadUsage(); }, 5000)`，新用量板不会被旧布局覆盖。
+- 用量 API 增加 `configured` 标记；管理端默认勾选「仅当前配置」，按厂商 / Provider / 模型表只显示当前 `gateway_config.json` 里的条目，历史数据保留，取消勾选即可查看全部。
+- 示例配置与 `.env.example` 对齐当前运行配置：删除 `opencode-zen` provider 和 `META_MODEL_API_KEY`。
+- 同步更新 README、`.env.example`、`.gitignore` 和 `.design/` 设计契约。
+
 ### v1.4.4（2026-11-13）
 
 - 修复 `muse-ember-1.0`「能连上但没回复」：WorkBuddy 发 `reasoning_effort: "none"`，上游只支持 `minimal/low/medium/high/xhigh/max`，直接 400。网关现在按 `model_meta.reasoning` 把 `none` 降到最低档（`minimal`），其他不支持的值删除。
 - 同时处理 Responses 的 `reasoning.effort`。
 - 管理端模型测试 `max_tokens` 从 64 提到 512，避免思考模型把输出配额耗光导致回复为空；空回复会显示原因。
-- `models.json` 的 `muse-ember-1.0` 地址从已失效的 `172.20.10.7` 改为 `127.0.0.1`。
+- `models.json` 的 `muse-ember-1.0` 地址从已失效的 `192.168.1.101` 改为 `127.0.0.1`。
+- 修复局域网 IP 误选 TUN 网卡：`lan_urls` 现在跳过 `Meta`/`cfw-tap`/`vEthernet` 等虚拟网卡和 `198.18.0.0/15`，避免客户端把 `198.18.0.1` 走代理导致 502。`models.json` 里的 `198.18.0.1:8788` 已改回 `127.0.0.1:8788`。
 
 ### v1.4.3（2026-11-13）
 

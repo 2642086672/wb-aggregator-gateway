@@ -7,7 +7,7 @@ Single-file Python (`stdlib` + `requests`). No database, no frontend build step.
 ## Features
 
 - **Two protocol entry points** — OpenAI Chat Completions / Responses and Anthropic Messages on one port.
-- **Multi-provider aggregation** — OpenCode Go, OpenCode Zen, LongCat, and any OpenAI-compatible endpoint.
+- **Multi-provider aggregation** — OpenCode Go, LongCat, CodingPass, and any OpenAI-compatible endpoint.
 - **Per-model proxy routing** — region-restricted models go through a local proxy; everything else connects directly for speed.
 - **Request sanitization** — strips client-private fields (WorkBuddy's `startsNewUserRequest`, `traceId`, etc.) that upstream rejects; also fixes protocol mismatches (`max_tokens` ↔ `max_output_tokens`, reasoning-effort levels).
 - **Smart aliases + failover** — `smart` / `cheap` / `vision` / `coding` aliases pick a model by candidate order, skip cooling models, and fall back on retryable errors.
@@ -38,6 +38,7 @@ Set credentials in the current session (never commit them):
 ```powershell
 $env:OPENCODE_GO_API_KEY = "your-opencode-go-key"
 $env:LONGCAT_API_KEY = "your-longcat-key"
+$env:CODINGPASS_API_KEY = "your-codingpass-key"
 $env:GATEWAY_CLIENT_KEYS = "your-client-key"
 $env:GATEWAY_ADMIN_TOKEN = "your-admin-token"
 python gateway.py

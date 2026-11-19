@@ -12,6 +12,7 @@ gateway_config*.bak*
 # Runtime data and request captures
 gateway.log
 gateway_usage.json
+gateway_usage.json.bak*
 gateway_last_request.json
 wb_bridge.log
 wb_last_request.json
@@ -58,7 +59,3 @@ venv/
 # Local preview instances / scratch
 admin_preview.html
 2026-11-07-17-11-42.zip
-
-# Multi-instance test leftovers (contain live credentials)
-instance2/
-instance*/
