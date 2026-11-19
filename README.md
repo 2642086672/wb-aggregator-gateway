@@ -1,12 +1,20 @@
 # WB Aggregator Gateway
 
-**v1.5.1** · Python 3.9+ · single file, no database, no frontend build step
+**v1.5.2** · Python 3.9+ · single file, no database, no frontend build step
 
 A lightweight OpenAI/Anthropic-compatible multi-provider gateway: one endpoint and one key in front of several upstream providers, with per-model proxy routing, request sanitization, smart aliases with failover, token/cost accounting, and a local admin UI.
 
 ---
 
-## 最新版本（v1.5.1）
+## 最新版本（v1.5.2）
+
+**Token 计量改为 K / M / B**
+
+- 小于 1000 显示实际数字；≥1000 用 `K`（千）、`M`（百万）、`B`（十亿）缩进，最多两位小数：`12.35K`、`1.05M`、`1.45B`。
+- 修正四舍五入晋档：`999,999` 以前会显示成 `1000K`，现在自动变成 `1M`；`999,999,999` → `1B`。
+- 覆盖范围：用量总览 5 张 KPI、按厂商 / Provider / 模型三张表、模型能力表的上下文与输出上限、近 60 秒实时 TPS 明细。
+
+**v1.5.1 内容**
 
 **用量统计支持时间段筛选**
 
@@ -37,7 +45,7 @@ A lightweight OpenAI/Anthropic-compatible multi-provider gateway: one endpoint a
 - **Smart aliases + failover** — `smart` / `cheap` / `vision` / `coding` aliases pick a model by candidate order, skip cooling models, and fall back on retryable errors. Fallbacks are safe for streaming: the error body is fully read before anything is forwarded.
 - **Token & cost accounting** — input/output/cached/reasoning tokens, cache-hit rate (`cached ÷ input`), real charged amount vs price-list estimate, per-vendor / per-provider / per-model breakdowns, and per-day aggregation.
 - **Live TPS** — `output_tps = Σ output tokens ÷ Σ request duration` over the last 60 s, plus per-model rows and a "last request" figure.
-- **Chinese large-number units** — under 1M shows the exact number; above that switches to 百万 / 千万 / 亿 / 十亿 / 百亿 / 千亿 / 万亿.
+- **Token units** — below 1,000 shows the exact number; above that switches to `K` / `M` / `B` (max two decimals, e.g. `12.35K`, `1.05M`, `1.45B`), with automatic rollover so `999,999` renders as `1M` instead of `1000K`.
 - **Quota monitoring** — reads the real OpenCode Go server-side usage endpoint (`/zen/go/v1/usage`) for 5-hour rolling / weekly / monthly percentages, reset times, and an ETA estimate; optionally reads Zen prepaid balance via a Console session cookie.
 - **Admin UI** — four switchable panels (runtime / usage / upstream / rules), plain HTML embedded in the Python file. No CDN, no build step.
 - **Security** — inbound client-key auth, admin UI restricted to localhost by default, config saves guarded by an `X-Config-Revision` optimistic lock, and `${ENV}` indirection for all upstream secrets.
@@ -124,6 +132,7 @@ Copy `gateway_config.example.json` to `gateway_config.json`, then supply secrets
 
 | Version | Highlights |
 |---|---|
+| **v1.5.2** | Token units switched to `K` / `M` / `B` with automatic rollover (`999,999` → `1M`) |
 | **v1.5.1** | Period-filtered usage (today/week/month/all) with per-day storage; LAN interface filtering for virtual/TUN adapters |
 | v1.5.0 | Admin UI rebuilt as four dashboards; usage KPIs, Top-5, search/filter/pagination/expand; TPS denominator fixed; "configured only" filter |
 | v1.4.4 | `reasoning_effort` normalization (`none` → lowest supported); admin test budget raised; LAN/TUN address fix |
